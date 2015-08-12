@@ -1,0 +1,3 @@
+-cp gitblog
+-main gitblog.GitBlog
+-js bin/gitblog.js
