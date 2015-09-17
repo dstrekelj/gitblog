@@ -1,3 +1,8 @@
+-resource resources/user.mtt@UserView
+-resource resources/repositories.mtt@RepositoriesView
+
+-dce no
+
 -cp gitblog
 -main gitblog.GitBlog
 -js bin/gitblog.js

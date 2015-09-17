@@ -18,7 +18,7 @@ class Connection extends Http
 	
 	/**
 	 * GET request.
-	 * @return
+	 * @return	`Connection` object for chaining
 	 */
 	public function get() : Connection
 	{
@@ -30,7 +30,7 @@ class Connection extends Http
 	/**
 	 * Called on successful request.
 	 * @param	Callback
-	 * @return
+	 * @return	`Connection` object for chaining
 	 */
 	public function onSuccess(Callback : String->Void) : Connection
 	{
@@ -42,7 +42,7 @@ class Connection extends Http
 	/**
 	 * Called on failed request.
 	 * @param	Callback
-	 * @return
+	 * @return	`Connection` object for chaining
 	 */
 	public function onFailure(Callback : String->Void) : Connection
 	{
@@ -54,7 +54,7 @@ class Connection extends Http
 	/**
 	 * Called on HTTP status change.
 	 * @param	Callback
-	 * @return
+	 * @return	`Connection` object for chaining
 	 */
 	public function onChange(Callback : Int->Void) : Connection
 	{
@@ -65,7 +65,7 @@ class Connection extends Http
 	
 	/**
 	 * POST request.
-	 * @return
+	 * @return	`Connection` object for chaining
 	 */
 	public function post() : Connection
 	{
