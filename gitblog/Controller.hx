@@ -14,7 +14,14 @@ class Controller
     API.user
       .onSuccess(function(Data : String) {
         var user : UserResponse = haxe.Json.parse(Data);
-        gitblog.GitBlog.userView.update({user : user});
+        var userModel = new gitblog.models.UserModel({
+          name : user.name
+          ,email : user.email
+          ,login : user.login
+          ,location : user.location
+          ,url : user.url
+        });
+        gitblog.GitBlog.userView.update({ user : userModel });
       })
       .onFailure(function(Message : String) { trace(Message); })
       .onChange(function(Status : Int) { trace(Status); })
@@ -25,12 +32,6 @@ class Controller
         var repos : ReposResponse = haxe.Json.parse(Data);
         // dce disabled because it messes with object array
         gitblog.GitBlog.repositoriesView.update({ repositories : repos });
-        /*
-        for (repo in repos)
-        {
-          trace(repo.name);
-        }
-        */
       })
       .onFailure(function(Message : String) { trace(Message); })
       .onChange(function(Status : Int) { trace(Status); })
