@@ -1,5 +1,5 @@
--resource resources/user.mtt@UserView
--resource resources/repositories.mtt@RepositoriesView
+-resource resources/user.mtt@UserTemplate
+-resource resources/repositories.mtt@RepositoriesTemplate
 
 -dce no
 

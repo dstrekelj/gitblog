@@ -879,6 +879,63 @@ Type.enumIndex = function(e) {
 Type.allEnums = function(e) {
 	return e.__empty_constructs__;
 };
+var frank = {};
+frank.App = function() {
+	this.routes = new haxe.ds.ObjectMap();
+	this.context = null;
+	window.addEventListener("hashchange",$bind(this,this.router));
+};
+$hxClasses["frank.App"] = frank.App;
+frank.App.__name__ = ["frank","App"];
+frank.App.prototype = {
+	routes: null
+	,context: null
+	,route: function(route,controller) {
+		this.routes.set(route,controller);
+		return this;
+	}
+	,router: function(event) {
+		var hash = HxOverrides.substr(window.location.hash,1,null);
+		var route = this.findRoute(hash);
+		if(route != null) {
+			var controller = this.routes.h[route.__id__];
+			if(this.context != null) this.context.onExit(hash);
+			this.context = controller;
+			this.context.onEnter(hash);
+		} else haxe.Log.trace("ERROR: Unmatched route.",{ fileName : "App.hx", lineNumber : 45, className : "frank.App", methodName : "router"});
+	}
+	,findRoute: function(hash) {
+		var $it0 = this.routes.keys();
+		while( $it0.hasNext() ) {
+			var route = $it0.next();
+			if(route.match(hash)) return route;
+		}
+		return null;
+	}
+	,__class__: frank.App
+};
+frank.Controller = function() { };
+$hxClasses["frank.Controller"] = frank.Controller;
+frank.Controller.__name__ = ["frank","Controller"];
+frank.Controller.prototype = {
+	onEnter: null
+	,onExit: null
+	,__class__: frank.Controller
+};
+frank.View = function(parentElementID,templateName) {
+	this.parentElement = window.document.getElementById(parentElementID);
+	this.viewTemplate = new haxe.Template(haxe.Resource.getString(templateName));
+};
+$hxClasses["frank.View"] = frank.View;
+frank.View.__name__ = ["frank","View"];
+frank.View.prototype = {
+	parentElement: null
+	,viewTemplate: null
+	,update: function(viewData) {
+		this.parentElement.innerHTML = this.viewTemplate.execute(viewData);
+	}
+	,__class__: frank.View
+};
 var haxe = {};
 haxe.Http = function(url) {
 	this.url = url;
@@ -1045,99 +1102,18 @@ gitblog.Connection.prototype = $extend(haxe.Http.prototype,{
 	}
 	,__class__: gitblog.Connection
 });
-gitblog.Controller = function() {
-	var API = new gitblog.GitHubAPI("dstrekelj");
-	API.user.onSuccess(function(Data) {
-		var user = JSON.parse(Data);
-		var userModel = new gitblog.models.UserModel({ name : user.name, email : user.email, login : user.login, location : user.location, url : user.url});
-		gitblog.GitBlog.userView.update({ user : userModel});
-	}).onFailure(function(Message) {
-		haxe.Log.trace(Message,{ fileName : "Controller.hx", lineNumber : 26, className : "gitblog.Controller", methodName : "new"});
-	}).onChange(function(Status) {
-		haxe.Log.trace(Status,{ fileName : "Controller.hx", lineNumber : 27, className : "gitblog.Controller", methodName : "new"});
-	}).get();
-	API.repos.onSuccess(function(Data1) {
-		var repos = JSON.parse(Data1);
-		gitblog.GitBlog.repositoriesView.update({ repositories : repos});
-	}).onFailure(function(Message1) {
-		haxe.Log.trace(Message1,{ fileName : "Controller.hx", lineNumber : 36, className : "gitblog.Controller", methodName : "new"});
-	}).onChange(function(Status1) {
-		haxe.Log.trace(Status1,{ fileName : "Controller.hx", lineNumber : 37, className : "gitblog.Controller", methodName : "new"});
-	}).get();
-	API.contents.onSuccess(function(Data2) {
-		var contents = JSON.parse(Data2);
-		var _g = 0;
-		while(_g < contents.length) {
-			var content = contents[_g];
-			++_g;
-			haxe.Log.trace(content.name,{ fileName : "Controller.hx", lineNumber : 45, className : "gitblog.Controller", methodName : "new"});
-		}
-	}).onFailure(function(Message2) {
-		haxe.Log.trace(Message2,{ fileName : "Controller.hx", lineNumber : 48, className : "gitblog.Controller", methodName : "new"});
-	}).onChange(function(Status2) {
-		haxe.Log.trace(Status2,{ fileName : "Controller.hx", lineNumber : 49, className : "gitblog.Controller", methodName : "new"});
-	}).get();
-};
-$hxClasses["gitblog.Controller"] = gitblog.Controller;
-gitblog.Controller.__name__ = ["gitblog","Controller"];
-gitblog.Controller.prototype = {
-	__class__: gitblog.Controller
-};
 gitblog.GitBlog = function() {
-	gitblog.GitBlog.userView = new gitblog.View("user","UserView");
-	gitblog.GitBlog.repositoriesView = new gitblog.View("repositories","RepositoriesView");
-	new gitblog.Controller();
+	new frank.App().route(new EReg("^/$",""),new gitblog.controllers.HomeController()).route(new EReg("^/about/$",""),new gitblog.controllers.AboutController());
 };
 $hxClasses["gitblog.GitBlog"] = gitblog.GitBlog;
 gitblog.GitBlog.__name__ = ["gitblog","GitBlog"];
-gitblog.GitBlog.userView = null;
-gitblog.GitBlog.repositoriesView = null;
+gitblog.GitBlog.api = null;
 gitblog.GitBlog.main = function() {
+	gitblog.GitBlog.api = new gitblog.GitHubAPI("dstrekelj");
 	new gitblog.GitBlog();
-	new gitblog.frank.App().route("/hello",new gitblog.HelloController()).route("/goodbye",new gitblog.GoodbyeController());
 };
 gitblog.GitBlog.prototype = {
 	__class__: gitblog.GitBlog
-};
-gitblog.frank = {};
-gitblog.frank.Controller = function() { };
-$hxClasses["gitblog.frank.Controller"] = gitblog.frank.Controller;
-gitblog.frank.Controller.__name__ = ["gitblog","frank","Controller"];
-gitblog.frank.Controller.prototype = {
-	route: null
-	,onEnter: null
-	,onExit: null
-	,__class__: gitblog.frank.Controller
-};
-gitblog.HelloController = function() {
-};
-$hxClasses["gitblog.HelloController"] = gitblog.HelloController;
-gitblog.HelloController.__name__ = ["gitblog","HelloController"];
-gitblog.HelloController.__interfaces__ = [gitblog.frank.Controller];
-gitblog.HelloController.prototype = {
-	route: null
-	,onEnter: function() {
-		haxe.Log.trace("entering " + this.route,{ fileName : "GitBlog.hx", lineNumber : 38, className : "gitblog.HelloController", methodName : "onEnter"});
-	}
-	,onExit: function() {
-		haxe.Log.trace("leaving " + this.route,{ fileName : "GitBlog.hx", lineNumber : 43, className : "gitblog.HelloController", methodName : "onExit"});
-	}
-	,__class__: gitblog.HelloController
-};
-gitblog.GoodbyeController = function() {
-};
-$hxClasses["gitblog.GoodbyeController"] = gitblog.GoodbyeController;
-gitblog.GoodbyeController.__name__ = ["gitblog","GoodbyeController"];
-gitblog.GoodbyeController.__interfaces__ = [gitblog.frank.Controller];
-gitblog.GoodbyeController.prototype = {
-	route: null
-	,onEnter: function() {
-		haxe.Log.trace("entering " + this.route,{ fileName : "GitBlog.hx", lineNumber : 55, className : "gitblog.GoodbyeController", methodName : "onEnter"});
-	}
-	,onExit: function() {
-		haxe.Log.trace("leaving " + this.route,{ fileName : "GitBlog.hx", lineNumber : 60, className : "gitblog.GoodbyeController", methodName : "onExit"});
-	}
-	,__class__: gitblog.GoodbyeController
 };
 gitblog.GitHubAPI = function(username) {
 	this.username = username;
@@ -1154,45 +1130,54 @@ gitblog.GitHubAPI.prototype = {
 	,contents: null
 	,__class__: gitblog.GitHubAPI
 };
-gitblog.View = function(parentElementID,templateName) {
-	this.parentElement = window.document.getElementById(parentElementID);
-	this.viewTemplate = new haxe.Template(haxe.Resource.getString(templateName));
+gitblog.controllers = {};
+gitblog.controllers.AboutController = function() {
 };
-$hxClasses["gitblog.View"] = gitblog.View;
-gitblog.View.__name__ = ["gitblog","View"];
-gitblog.View.prototype = {
-	parentElement: null
-	,viewTemplate: null
-	,update: function(viewData) {
-		this.parentElement.innerHTML = this.viewTemplate.execute(viewData);
+$hxClasses["gitblog.controllers.AboutController"] = gitblog.controllers.AboutController;
+gitblog.controllers.AboutController.__name__ = ["gitblog","controllers","AboutController"];
+gitblog.controllers.AboutController.__interfaces__ = [frank.Controller];
+gitblog.controllers.AboutController.prototype = {
+	onEnter: function(hash) {
+		window.document.getElementById("about").innerHTML = "HELLO FROM ABOUTCONTROLLER!";
 	}
-	,__class__: gitblog.View
+	,onExit: function(hash) {
+	}
+	,__class__: gitblog.controllers.AboutController
 };
-gitblog.frank.App = function() {
-	this.routes = new haxe.ds.StringMap();
-	this.context = null;
-	window.addEventListener("hashchange",$bind(this,this.router));
+gitblog.controllers.HomeController = function() {
+	var _g = this;
+	this.userView = new frank.View("user","UserTemplate");
+	this.repositoriesView = new frank.View("repositories","RepositoriesTemplate");
+	gitblog.GitBlog.api.user.onSuccess(function(Data) {
+		var user = JSON.parse(Data);
+		var userModel = new gitblog.models.UserModel({ name : user.name, email : user.email, login : user.login, location : user.location, url : user.url});
+		_g.userView.update({ user : userModel});
+	}).onFailure(function(Message) {
+		haxe.Log.trace(Message,{ fileName : "HomeController.hx", lineNumber : 25, className : "gitblog.controllers.HomeController", methodName : "new"});
+	}).onChange(function(Status) {
+		haxe.Log.trace(Status,{ fileName : "HomeController.hx", lineNumber : 26, className : "gitblog.controllers.HomeController", methodName : "new"});
+	}).get();
+	gitblog.GitBlog.api.repos.onSuccess(function(Data1) {
+		var repos = JSON.parse(Data1);
+		_g.repositoriesView.update({ repositories : repos});
+	}).onFailure(function(Message1) {
+		haxe.Log.trace(Message1,{ fileName : "HomeController.hx", lineNumber : 35, className : "gitblog.controllers.HomeController", methodName : "new"});
+	}).onChange(function(Status1) {
+		haxe.Log.trace(Status1,{ fileName : "HomeController.hx", lineNumber : 36, className : "gitblog.controllers.HomeController", methodName : "new"});
+	}).get();
 };
-$hxClasses["gitblog.frank.App"] = gitblog.frank.App;
-gitblog.frank.App.__name__ = ["gitblog","frank","App"];
-gitblog.frank.App.prototype = {
-	routes: null
-	,context: null
-	,route: function(route,controller) {
-		controller.route = route;
-		this.routes.set(route,controller);
-		return this;
+$hxClasses["gitblog.controllers.HomeController"] = gitblog.controllers.HomeController;
+gitblog.controllers.HomeController.__name__ = ["gitblog","controllers","HomeController"];
+gitblog.controllers.HomeController.__interfaces__ = [frank.Controller];
+gitblog.controllers.HomeController.prototype = {
+	userView: null
+	,repositoriesView: null
+	,onEnter: function(hash) {
+		haxe.Log.trace(hash,{ fileName : "HomeController.hx", lineNumber : 40, className : "gitblog.controllers.HomeController", methodName : "onEnter"});
 	}
-	,router: function(event) {
-		var hash = HxOverrides.substr(window.location.hash,1,null);
-		haxe.Log.trace(hash,{ fileName : "App.hx", lineNumber : 29, className : "gitblog.frank.App", methodName : "router"});
-		if(this.routes.exists(hash)) {
-			if(this.context != null) this.context.onExit();
-			this.context = this.routes.get(hash);
-			this.context.onEnter();
-		} else haxe.Log.trace("ERROR: Route " + hash + " is not registered with the application.",{ fileName : "App.hx", lineNumber : 39, className : "gitblog.frank.App", methodName : "router"});
+	,onExit: function(hash) {
 	}
-	,__class__: gitblog.frank.App
+	,__class__: gitblog.controllers.HomeController
 };
 gitblog.models = {};
 gitblog.models.UserModel = function(params) {
@@ -3761,7 +3746,7 @@ if(Array.prototype.filter == null) Array.prototype.filter = function(f1) {
 	}
 	return a1;
 };
-haxe.Resource.content = [{ name : "RepositoriesView", data : "PHVsPg0KOjpmb3JlYWNoIHJlcG9zaXRvcmllczo6DQogIDxsaT46Ol9fY3VycmVudF9fLm5hbWU6OjwvbGk+DQo6OmVuZDo6DQo8L3VsPg"},{ name : "UserView", data : "PHVsPg0KPGxpPjo6dXNlci5uYW1lOjo8L2xpPg0KPGxpPjo6dXNlci5sb2dpbjo6PC9saT4NCjxsaT46OnVzZXIubG9jYXRpb246OjwvbGk+DQo8bGk+Ojp1c2VyLmVtYWlsOjo8L2xpPg0KPGxpPjxhIGhyZWY9Ijo6dXNlci51cmw6OiI+VmlldyBvbiBHaXRIdWI8L2E+PC9saT4NCjwvdWw+"}];
+haxe.Resource.content = [{ name : "UserTemplate", data : "PHVsPg0KPGxpPjo6dXNlci5uYW1lOjo8L2xpPg0KPGxpPjo6dXNlci5sb2dpbjo6PC9saT4NCjxsaT46OnVzZXIubG9jYXRpb246OjwvbGk+DQo8bGk+Ojp1c2VyLmVtYWlsOjo8L2xpPg0KPGxpPjxhIGhyZWY9Ijo6dXNlci51cmw6OiI+VmlldyBvbiBHaXRIdWI8L2E+PC9saT4NCjwvdWw+"},{ name : "RepositoriesTemplate", data : "PHVsPg0KOjpmb3JlYWNoIHJlcG9zaXRvcmllczo6DQogIDxsaT46Ol9fY3VycmVudF9fLm5hbWU6OjwvbGk+DQo6OmVuZDo6DQo8L3VsPg"}];
 haxe.Serializer.USE_CACHE = false;
 haxe.Serializer.USE_ENUM_INDEX = false;
 haxe.Serializer.BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789%:";
