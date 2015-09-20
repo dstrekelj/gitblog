@@ -8,6 +8,8 @@ class GitBlog
   {
     api = new gitblog.GitHubAPI('dstrekelj');
 
+    gitblog.Views.init();
+
     new GitBlog();
   }
   

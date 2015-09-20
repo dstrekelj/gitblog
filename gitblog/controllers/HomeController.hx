@@ -2,14 +2,8 @@ package gitblog.controllers;
 
 class HomeController implements frank.Controller
 {
-  var userView : frank.View;
-  var repositoriesView : frank.View;
-
   public function new()
   {
-    userView = new frank.View('user', 'UserTemplate');
-    repositoriesView = new frank.View('repositories', 'RepositoriesTemplate');
-
     GitBlog.api.user
       .onSuccess(function(Data : String) {
         var user : gitblog.Responses.UserResponse = haxe.Json.parse(Data);
@@ -20,7 +14,7 @@ class HomeController implements frank.Controller
           ,location : user.location
           ,url : user.url
         });
-        userView.update({ user : userModel });
+        gitblog.Views.userView.update({ user : userModel });
       })
       .onFailure(function(Message : String) { trace(Message); })
       .onChange(function(Status : Int) { trace(Status); })
@@ -30,7 +24,7 @@ class HomeController implements frank.Controller
       .onSuccess(function(Data : String) {
         var repos : gitblog.Responses.ReposResponse = haxe.Json.parse(Data);
         // dce disabled because it messes with object array
-        repositoriesView.update({ repositories : repos });
+        gitblog.Views.repositoriesView.update({ repositories : repos });
       })
       .onFailure(function(Message : String) { trace(Message); })
       .onChange(function(Status : Int) { trace(Status); })

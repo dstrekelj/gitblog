@@ -1,11 +1,8 @@
 package gitblog;
+
 import haxe.Http;
 import haxe.remoting.HttpConnection;
 
-/**
- * ...
- * @author Domagoj Štrekelj
- */
 class GitHubAPI
 {
   public var username : String;

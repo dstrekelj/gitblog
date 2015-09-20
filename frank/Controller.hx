@@ -9,7 +9,7 @@ interface Controller
   public function onEnter(hash : String) : Void;
   /**
    * Called by `App` on hash change when leaving the attached route.
-   * @param   hash    String, current hash that triggered the change
+   * @param   hash    String, new hash that triggered the change
    */
   public function onExit(hash : String) : Void;
 }

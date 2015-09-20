@@ -1110,6 +1110,7 @@ gitblog.GitBlog.__name__ = ["gitblog","GitBlog"];
 gitblog.GitBlog.api = null;
 gitblog.GitBlog.main = function() {
 	gitblog.GitBlog.api = new gitblog.GitHubAPI("dstrekelj");
+	gitblog.Views.init();
 	new gitblog.GitBlog();
 };
 gitblog.GitBlog.prototype = {
@@ -1130,6 +1131,15 @@ gitblog.GitHubAPI.prototype = {
 	,contents: null
 	,__class__: gitblog.GitHubAPI
 };
+gitblog.Views = function() { };
+$hxClasses["gitblog.Views"] = gitblog.Views;
+gitblog.Views.__name__ = ["gitblog","Views"];
+gitblog.Views.userView = null;
+gitblog.Views.repositoriesView = null;
+gitblog.Views.init = function() {
+	gitblog.Views.userView = new frank.View("user","UserTemplate");
+	gitblog.Views.repositoriesView = new frank.View("repositories","RepositoriesTemplate");
+};
 gitblog.controllers = {};
 gitblog.controllers.AboutController = function() {
 };
@@ -1145,35 +1155,30 @@ gitblog.controllers.AboutController.prototype = {
 	,__class__: gitblog.controllers.AboutController
 };
 gitblog.controllers.HomeController = function() {
-	var _g = this;
-	this.userView = new frank.View("user","UserTemplate");
-	this.repositoriesView = new frank.View("repositories","RepositoriesTemplate");
 	gitblog.GitBlog.api.user.onSuccess(function(Data) {
 		var user = JSON.parse(Data);
 		var userModel = new gitblog.models.UserModel({ name : user.name, email : user.email, login : user.login, location : user.location, url : user.url});
-		_g.userView.update({ user : userModel});
+		gitblog.Views.userView.update({ user : userModel});
 	}).onFailure(function(Message) {
-		haxe.Log.trace(Message,{ fileName : "HomeController.hx", lineNumber : 25, className : "gitblog.controllers.HomeController", methodName : "new"});
+		haxe.Log.trace(Message,{ fileName : "HomeController.hx", lineNumber : 19, className : "gitblog.controllers.HomeController", methodName : "new"});
 	}).onChange(function(Status) {
-		haxe.Log.trace(Status,{ fileName : "HomeController.hx", lineNumber : 26, className : "gitblog.controllers.HomeController", methodName : "new"});
+		haxe.Log.trace(Status,{ fileName : "HomeController.hx", lineNumber : 20, className : "gitblog.controllers.HomeController", methodName : "new"});
 	}).get();
 	gitblog.GitBlog.api.repos.onSuccess(function(Data1) {
 		var repos = JSON.parse(Data1);
-		_g.repositoriesView.update({ repositories : repos});
+		gitblog.Views.repositoriesView.update({ repositories : repos});
 	}).onFailure(function(Message1) {
-		haxe.Log.trace(Message1,{ fileName : "HomeController.hx", lineNumber : 35, className : "gitblog.controllers.HomeController", methodName : "new"});
+		haxe.Log.trace(Message1,{ fileName : "HomeController.hx", lineNumber : 29, className : "gitblog.controllers.HomeController", methodName : "new"});
 	}).onChange(function(Status1) {
-		haxe.Log.trace(Status1,{ fileName : "HomeController.hx", lineNumber : 36, className : "gitblog.controllers.HomeController", methodName : "new"});
+		haxe.Log.trace(Status1,{ fileName : "HomeController.hx", lineNumber : 30, className : "gitblog.controllers.HomeController", methodName : "new"});
 	}).get();
 };
 $hxClasses["gitblog.controllers.HomeController"] = gitblog.controllers.HomeController;
 gitblog.controllers.HomeController.__name__ = ["gitblog","controllers","HomeController"];
 gitblog.controllers.HomeController.__interfaces__ = [frank.Controller];
 gitblog.controllers.HomeController.prototype = {
-	userView: null
-	,repositoriesView: null
-	,onEnter: function(hash) {
-		haxe.Log.trace(hash,{ fileName : "HomeController.hx", lineNumber : 40, className : "gitblog.controllers.HomeController", methodName : "onEnter"});
+	onEnter: function(hash) {
+		haxe.Log.trace(hash,{ fileName : "HomeController.hx", lineNumber : 34, className : "gitblog.controllers.HomeController", methodName : "onEnter"});
 	}
 	,onExit: function(hash) {
 	}
