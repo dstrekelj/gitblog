@@ -14,9 +14,12 @@ class ContentsController implements frank.Controller
     content.parameters(hash)
       .onSuccess(function(response : String) {
         var data = haxe.Json.parse(response);
+        var timestamp : String = data.name.substr(0, 16);
+        var date : String = timestamp.substr(0, 10);
+        var time : String = timestamp.substr(11).split('-').join(':');
         gitblog.Views.contentView.update({
-          title : data.name
-          ,body : js.Browser.window.atob(data.content)
+          timestamp : [date, time].join(' @ ')
+          ,body : Markdown.markdownToHtml(js.Browser.window.atob(data.content))
         });
       })
       .onFailure(function(response : String) {

@@ -1,2 +1,2 @@
-<h1>::title::</h1>
-<pre>::body::</pre>
+<div>Written on ::timestamp::</div>
+::body::

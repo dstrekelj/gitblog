@@ -498,6 +498,97 @@ IMap.prototype = {
 	,toString: null
 	,__class__: IMap
 };
+var Markdown = function() { };
+$hxClasses["Markdown"] = Markdown;
+Markdown.__name__ = ["Markdown"];
+Markdown.markdownToHtml = function(markdown) {
+	var document = new Document();
+	try {
+		var lines = new EReg("(\r\n|\r)","g").replace(markdown,"\n").split("\n");
+		document.parseRefLinks(lines);
+		var blocks = document.parseLines(lines);
+		return Markdown.renderHtml(blocks);
+	} catch( e ) {
+		return "<pre>" + Std.string(e) + "</pre>";
+	}
+};
+Markdown.renderHtml = function(blocks) {
+	return new markdown.HtmlRenderer().render(blocks);
+};
+var Document = function() {
+	this.refLinks = new haxe.ds.StringMap();
+	this.inlineSyntaxes = [];
+};
+$hxClasses["Document"] = Document;
+Document.__name__ = ["Document"];
+Document.prototype = {
+	refLinks: null
+	,inlineSyntaxes: null
+	,linkResolver: null
+	,parseRefLinks: function(lines) {
+		var indent = "^[ ]{0,3}";
+		var id = "\\[([^\\]]+)\\]";
+		var quote = "\"[^\"]+\"";
+		var apos = "'[^']+'";
+		var paren = "\\([^)]+\\)";
+		var titles = new EReg("(" + quote + "|" + apos + "|" + paren + ")","");
+		var link = new EReg("" + indent + id + ":\\s+(\\S+)\\s*(" + quote + "|" + apos + "|" + paren + "|)\\s*$","");
+		var _g1 = 0;
+		var _g = lines.length;
+		while(_g1 < _g) {
+			var i = _g1++;
+			if(!link.match(lines[i])) continue;
+			var id1 = link.matched(1);
+			var url = link.matched(2);
+			var title = link.matched(3);
+			if(StringTools.startsWith(url,"<") && StringTools.endsWith(url,">")) url = HxOverrides.substr(url,1,url.length - 2);
+			if(title == "" && lines[i + 1] != null && titles.match(lines[i + 1])) {
+				title = titles.matched(1);
+				lines[i + 1] = "";
+			}
+			if(title == "") title = null; else title = title.substring(1,title.length - 1);
+			id1 = id1.toLowerCase();
+			var value = new Link(id1,url,title);
+			this.refLinks.set(id1,value);
+			lines[i] = "";
+		}
+	}
+	,parseLines: function(lines) {
+		var parser = new markdown.BlockParser(lines,this);
+		var blocks = [];
+		while(!(parser.pos >= parser.lines.length)) {
+			var _g = 0;
+			var _g1 = markdown.BlockSyntax.get_syntaxes();
+			while(_g < _g1.length) {
+				var syntax = _g1[_g];
+				++_g;
+				if(syntax.canParse(parser)) {
+					var block = syntax.parse(parser);
+					if(block != null) blocks.push(block);
+					break;
+				}
+			}
+		}
+		return blocks;
+	}
+	,parseInline: function(text) {
+		return new markdown.InlineParser(text,this).parse();
+	}
+	,__class__: Document
+};
+var Link = function(id,url,title) {
+	this.id = id;
+	this.url = url;
+	this.title = title;
+};
+$hxClasses["Link"] = Link;
+Link.__name__ = ["Link"];
+Link.prototype = {
+	id: null
+	,url: null
+	,title: null
+	,__class__: Link
+};
 Math.__name__ = ["Math"];
 var Reflect = function() { };
 $hxClasses["Reflect"] = Reflect;
@@ -1163,9 +1254,12 @@ gitblog.controllers.ContentsController.prototype = {
 	,onEnter: function(hash) {
 		this.content.parameters(hash).onSuccess(function(response) {
 			var data = JSON.parse(response);
-			gitblog.Views.contentView.update({ title : data.name, body : window.atob(data.content)});
+			var timestamp = data.name.substr(0,16);
+			var date = HxOverrides.substr(timestamp,0,10);
+			var time = HxOverrides.substr(timestamp,11,null).split("-").join(":");
+			gitblog.Views.contentView.update({ timestamp : [date,time].join(" @ "), body : Markdown.markdownToHtml(window.atob(data.content))});
 		}).onFailure(function(response1) {
-			haxe.Log.trace("FAILURE: " + response1,{ fileName : "ContentsController.hx", lineNumber : 23, className : "gitblog.controllers.ContentsController", methodName : "onEnter"});
+			haxe.Log.trace("FAILURE: " + response1,{ fileName : "ContentsController.hx", lineNumber : 26, className : "gitblog.controllers.ContentsController", methodName : "onEnter"});
 		}).get();
 	}
 	,onExit: function(hash) {
@@ -3722,6 +3816,983 @@ js.html._CanvasElement.CanvasUtil.getContextWebGL = function(canvas,attribs) {
 	}
 	return null;
 };
+var markdown = {};
+markdown.Node = function() { };
+$hxClasses["markdown.Node"] = markdown.Node;
+markdown.Node.__name__ = ["markdown","Node"];
+markdown.Node.prototype = {
+	accept: null
+	,__class__: markdown.Node
+};
+markdown.NodeVisitor = function() { };
+$hxClasses["markdown.NodeVisitor"] = markdown.NodeVisitor;
+markdown.NodeVisitor.__name__ = ["markdown","NodeVisitor"];
+markdown.NodeVisitor.prototype = {
+	visitText: null
+	,visitElementBefore: null
+	,visitElementAfter: null
+	,__class__: markdown.NodeVisitor
+};
+markdown.ElementNode = function(tag,children) {
+	this.tag = tag;
+	this.children = children;
+	this.attributes = new haxe.ds.StringMap();
+};
+$hxClasses["markdown.ElementNode"] = markdown.ElementNode;
+markdown.ElementNode.__name__ = ["markdown","ElementNode"];
+markdown.ElementNode.__interfaces__ = [markdown.Node];
+markdown.ElementNode.empty = function(tag) {
+	return new markdown.ElementNode(tag,null);
+};
+markdown.ElementNode.withTag = function(tag) {
+	return new markdown.ElementNode(tag,[]);
+};
+markdown.ElementNode.text = function(tag,text) {
+	return new markdown.ElementNode(tag,[new markdown.TextNode(text)]);
+};
+markdown.ElementNode.prototype = {
+	tag: null
+	,children: null
+	,attributes: null
+	,isEmpty: function() {
+		return this.children == null;
+	}
+	,accept: function(visitor) {
+		if(visitor.visitElementBefore(this)) {
+			var _g = 0;
+			var _g1 = this.children;
+			while(_g < _g1.length) {
+				var child = _g1[_g];
+				++_g;
+				child.accept(visitor);
+			}
+			visitor.visitElementAfter(this);
+		}
+	}
+	,__class__: markdown.ElementNode
+};
+markdown.TextNode = function(text) {
+	this.text = text;
+};
+$hxClasses["markdown.TextNode"] = markdown.TextNode;
+markdown.TextNode.__name__ = ["markdown","TextNode"];
+markdown.TextNode.__interfaces__ = [markdown.Node];
+markdown.TextNode.prototype = {
+	text: null
+	,accept: function(visitor) {
+		visitor.visitText(this);
+	}
+	,__class__: markdown.TextNode
+};
+markdown.BlockParser = function(lines,document) {
+	this.lines = lines;
+	this.document = document;
+	this.pos = 0;
+};
+$hxClasses["markdown.BlockParser"] = markdown.BlockParser;
+markdown.BlockParser.__name__ = ["markdown","BlockParser"];
+markdown.BlockParser.prototype = {
+	lines: null
+	,document: null
+	,pos: null
+	,get_current: function() {
+		return this.lines[this.pos];
+	}
+	,get_next: function() {
+		if(this.pos >= this.lines.length - 1) return null;
+		return this.lines[this.pos + 1];
+	}
+	,advance: function() {
+		this.pos++;
+	}
+	,get_isDone: function() {
+		return this.pos >= this.lines.length;
+	}
+	,matches: function(ereg) {
+		if(this.pos >= this.lines.length) return false;
+		return ereg.match(this.lines[this.pos]);
+	}
+	,matchesNext: function(ereg) {
+		if(this.get_next() == null) return false;
+		return ereg.match(this.get_next());
+	}
+	,__class__: markdown.BlockParser
+	,__properties__: {get_isDone:"get_isDone",get_next:"get_next",get_current:"get_current"}
+};
+markdown.BlockSyntax = function() {
+};
+$hxClasses["markdown.BlockSyntax"] = markdown.BlockSyntax;
+markdown.BlockSyntax.__name__ = ["markdown","BlockSyntax"];
+markdown.BlockSyntax.__properties__ = {get_syntaxes:"get_syntaxes"}
+markdown.BlockSyntax.syntaxes = null;
+markdown.BlockSyntax.get_syntaxes = function() {
+	if(markdown.BlockSyntax.syntaxes == null) markdown.BlockSyntax.syntaxes = [new markdown.EmptyBlockSyntax(),new markdown.BlockHtmlSyntax(),new markdown.SetextHeaderSyntax(),new markdown.HeaderSyntax(),new markdown.CodeBlockSyntax(),new markdown.GitHubCodeBlockSyntax(),new markdown.BlockquoteSyntax(),new markdown.HorizontalRuleSyntax(),new markdown.UnorderedListSyntax(),new markdown.OrderedListSyntax(),new markdown.TableSyntax(),new markdown.ParagraphSyntax()];
+	return markdown.BlockSyntax.syntaxes;
+};
+markdown.BlockSyntax.isAtBlockEnd = function(parser) {
+	if(parser.pos >= parser.lines.length) return true;
+	var _g = 0;
+	var _g1 = markdown.BlockSyntax.get_syntaxes();
+	while(_g < _g1.length) {
+		var syntax = _g1[_g];
+		++_g;
+		if(syntax.canParse(parser) && syntax.get_canEndBlock()) return true;
+	}
+	return false;
+};
+markdown.BlockSyntax.prototype = {
+	get_pattern: function() {
+		return null;
+	}
+	,get_canEndBlock: function() {
+		return true;
+	}
+	,canParse: function(parser) {
+		return this.get_pattern().match(parser.lines[parser.pos]);
+	}
+	,parse: function(parser) {
+		return null;
+	}
+	,parseChildLines: function(parser) {
+		var childLines = [];
+		while(!(parser.pos >= parser.lines.length)) {
+			if(!this.get_pattern().match(parser.lines[parser.pos])) break;
+			childLines.push(this.get_pattern().matched(1));
+			parser.advance();
+		}
+		return childLines;
+	}
+	,__class__: markdown.BlockSyntax
+	,__properties__: {get_canEndBlock:"get_canEndBlock",get_pattern:"get_pattern"}
+};
+markdown.EmptyBlockSyntax = function() {
+	markdown.BlockSyntax.call(this);
+};
+$hxClasses["markdown.EmptyBlockSyntax"] = markdown.EmptyBlockSyntax;
+markdown.EmptyBlockSyntax.__name__ = ["markdown","EmptyBlockSyntax"];
+markdown.EmptyBlockSyntax.__super__ = markdown.BlockSyntax;
+markdown.EmptyBlockSyntax.prototype = $extend(markdown.BlockSyntax.prototype,{
+	get_pattern: function() {
+		return markdown.BlockSyntax.RE_EMPTY;
+	}
+	,parse: function(parser) {
+		parser.advance();
+		return null;
+	}
+	,__class__: markdown.EmptyBlockSyntax
+});
+markdown.SetextHeaderSyntax = function() {
+	markdown.BlockSyntax.call(this);
+};
+$hxClasses["markdown.SetextHeaderSyntax"] = markdown.SetextHeaderSyntax;
+markdown.SetextHeaderSyntax.__name__ = ["markdown","SetextHeaderSyntax"];
+markdown.SetextHeaderSyntax.__super__ = markdown.BlockSyntax;
+markdown.SetextHeaderSyntax.prototype = $extend(markdown.BlockSyntax.prototype,{
+	canParse: function(parser) {
+		return parser.matchesNext(markdown.BlockSyntax.RE_SETEXT);
+	}
+	,parse: function(parser) {
+		var re = markdown.BlockSyntax.RE_SETEXT;
+		re.match(parser.get_next());
+		var tag;
+		if(re.matched(1).charAt(0) == "=") tag = "h1"; else tag = "h2";
+		var contents = parser.document.parseInline(parser.lines[parser.pos]);
+		parser.advance();
+		parser.advance();
+		return new markdown.ElementNode(tag,contents);
+	}
+	,__class__: markdown.SetextHeaderSyntax
+});
+markdown.HeaderSyntax = function() {
+	markdown.BlockSyntax.call(this);
+};
+$hxClasses["markdown.HeaderSyntax"] = markdown.HeaderSyntax;
+markdown.HeaderSyntax.__name__ = ["markdown","HeaderSyntax"];
+markdown.HeaderSyntax.__super__ = markdown.BlockSyntax;
+markdown.HeaderSyntax.prototype = $extend(markdown.BlockSyntax.prototype,{
+	get_pattern: function() {
+		return markdown.BlockSyntax.RE_HEADER;
+	}
+	,parse: function(parser) {
+		this.get_pattern().match(parser.lines[parser.pos]);
+		parser.advance();
+		var level = this.get_pattern().matched(1).length;
+		var contents = parser.document.parseInline(StringTools.trim(this.get_pattern().matched(2)));
+		return new markdown.ElementNode("h" + level,contents);
+	}
+	,__class__: markdown.HeaderSyntax
+});
+markdown.BlockquoteSyntax = function() {
+	markdown.BlockSyntax.call(this);
+};
+$hxClasses["markdown.BlockquoteSyntax"] = markdown.BlockquoteSyntax;
+markdown.BlockquoteSyntax.__name__ = ["markdown","BlockquoteSyntax"];
+markdown.BlockquoteSyntax.__super__ = markdown.BlockSyntax;
+markdown.BlockquoteSyntax.prototype = $extend(markdown.BlockSyntax.prototype,{
+	get_pattern: function() {
+		return markdown.BlockSyntax.RE_BLOCKQUOTE;
+	}
+	,parseChildLines: function(parser) {
+		var childLines = [];
+		while(!(parser.pos >= parser.lines.length)) if(this.get_pattern().match(parser.lines[parser.pos])) {
+			childLines.push(this.get_pattern().matched(1));
+			parser.advance();
+		} else {
+			var nextMatch;
+			if(parser.get_next() != null) nextMatch = this.get_pattern().match(parser.get_next()); else nextMatch = false;
+			if(StringTools.trim(parser.lines[parser.pos]) == "" && nextMatch) {
+				childLines.push("");
+				childLines.push(this.get_pattern().matched(1));
+				parser.advance();
+				parser.advance();
+			} else break;
+		}
+		return childLines;
+	}
+	,parse: function(parser) {
+		var childLines = this.parseChildLines(parser);
+		var children = parser.document.parseLines(childLines);
+		return new markdown.ElementNode("blockquote",children);
+	}
+	,__class__: markdown.BlockquoteSyntax
+});
+markdown.CodeBlockSyntax = function() {
+	markdown.BlockSyntax.call(this);
+};
+$hxClasses["markdown.CodeBlockSyntax"] = markdown.CodeBlockSyntax;
+markdown.CodeBlockSyntax.__name__ = ["markdown","CodeBlockSyntax"];
+markdown.CodeBlockSyntax.__super__ = markdown.BlockSyntax;
+markdown.CodeBlockSyntax.prototype = $extend(markdown.BlockSyntax.prototype,{
+	get_pattern: function() {
+		return markdown.BlockSyntax.RE_INDENT;
+	}
+	,parseChildLines: function(parser) {
+		var childLines = [];
+		while(!(parser.pos >= parser.lines.length)) if(this.get_pattern().match(parser.lines[parser.pos])) {
+			childLines.push(this.get_pattern().matched(1));
+			parser.advance();
+		} else {
+			var nextMatch;
+			if(parser.get_next() != null) nextMatch = this.get_pattern().match(parser.get_next()); else nextMatch = false;
+			if(StringTools.trim(parser.lines[parser.pos]) == "" && nextMatch) {
+				childLines.push("");
+				childLines.push(this.get_pattern().matched(1));
+				parser.advance();
+				parser.advance();
+			} else break;
+		}
+		return childLines;
+	}
+	,parse: function(parser) {
+		var childLines = this.parseChildLines(parser);
+		childLines.push("");
+		var escaped = StringTools.htmlEscape(childLines.join("\n"));
+		return new markdown.ElementNode("pre",[markdown.ElementNode.text("code",escaped)]);
+	}
+	,__class__: markdown.CodeBlockSyntax
+});
+markdown.GitHubCodeBlockSyntax = function() {
+	markdown.BlockSyntax.call(this);
+};
+$hxClasses["markdown.GitHubCodeBlockSyntax"] = markdown.GitHubCodeBlockSyntax;
+markdown.GitHubCodeBlockSyntax.__name__ = ["markdown","GitHubCodeBlockSyntax"];
+markdown.GitHubCodeBlockSyntax.__super__ = markdown.BlockSyntax;
+markdown.GitHubCodeBlockSyntax.prototype = $extend(markdown.BlockSyntax.prototype,{
+	get_pattern: function() {
+		return markdown.BlockSyntax.RE_CODE;
+	}
+	,parseChildLines: function(parser) {
+		var childLines = [];
+		parser.advance();
+		while(!(parser.pos >= parser.lines.length)) if(!this.get_pattern().match(parser.lines[parser.pos])) {
+			childLines.push(parser.lines[parser.pos]);
+			parser.advance();
+		} else {
+			parser.advance();
+			break;
+		}
+		return childLines;
+	}
+	,parse: function(parser) {
+		var syntax = this.get_pattern().matched(1);
+		var childLines = this.parseChildLines(parser);
+		var code = markdown.ElementNode.text("code",StringTools.htmlEscape(childLines.join("\n")));
+		if(syntax != null && syntax.length > 0) code.attributes.set("class","prettyprint " + syntax);
+		return new markdown.ElementNode("pre",[code]);
+	}
+	,__class__: markdown.GitHubCodeBlockSyntax
+});
+markdown.HorizontalRuleSyntax = function() {
+	markdown.BlockSyntax.call(this);
+};
+$hxClasses["markdown.HorizontalRuleSyntax"] = markdown.HorizontalRuleSyntax;
+markdown.HorizontalRuleSyntax.__name__ = ["markdown","HorizontalRuleSyntax"];
+markdown.HorizontalRuleSyntax.__super__ = markdown.BlockSyntax;
+markdown.HorizontalRuleSyntax.prototype = $extend(markdown.BlockSyntax.prototype,{
+	get_pattern: function() {
+		return markdown.BlockSyntax.RE_HR;
+	}
+	,parse: function(parser) {
+		parser.advance();
+		return markdown.ElementNode.empty("hr");
+	}
+	,__class__: markdown.HorizontalRuleSyntax
+});
+markdown.BlockHtmlSyntax = function() {
+	markdown.BlockSyntax.call(this);
+};
+$hxClasses["markdown.BlockHtmlSyntax"] = markdown.BlockHtmlSyntax;
+markdown.BlockHtmlSyntax.__name__ = ["markdown","BlockHtmlSyntax"];
+markdown.BlockHtmlSyntax.__super__ = markdown.BlockSyntax;
+markdown.BlockHtmlSyntax.prototype = $extend(markdown.BlockSyntax.prototype,{
+	get_pattern: function() {
+		return markdown.BlockSyntax.RE_HTML;
+	}
+	,get_canEndBlock: function() {
+		return false;
+	}
+	,parse: function(parser) {
+		var childLines = [];
+		while(!(parser.pos >= parser.lines.length) && !parser.matches(markdown.BlockSyntax.RE_EMPTY)) {
+			childLines.push(parser.lines[parser.pos]);
+			parser.advance();
+		}
+		return new markdown.TextNode(childLines.join("\n"));
+	}
+	,__class__: markdown.BlockHtmlSyntax
+});
+markdown.ListItem = function(lines) {
+	this.forceBlock = false;
+	this.lines = lines;
+};
+$hxClasses["markdown.ListItem"] = markdown.ListItem;
+markdown.ListItem.__name__ = ["markdown","ListItem"];
+markdown.ListItem.prototype = {
+	forceBlock: null
+	,lines: null
+	,__class__: markdown.ListItem
+};
+markdown.ParagraphSyntax = function() {
+	markdown.BlockSyntax.call(this);
+};
+$hxClasses["markdown.ParagraphSyntax"] = markdown.ParagraphSyntax;
+markdown.ParagraphSyntax.__name__ = ["markdown","ParagraphSyntax"];
+markdown.ParagraphSyntax.__super__ = markdown.BlockSyntax;
+markdown.ParagraphSyntax.prototype = $extend(markdown.BlockSyntax.prototype,{
+	get_canEndBlock: function() {
+		return false;
+	}
+	,canParse: function(parser) {
+		return true;
+	}
+	,parse: function(parser) {
+		var childLines = [];
+		while(!markdown.BlockSyntax.isAtBlockEnd(parser)) {
+			childLines.push(StringTools.ltrim(parser.lines[parser.pos]));
+			parser.advance();
+		}
+		var contents = parser.document.parseInline(childLines.join("\n"));
+		return new markdown.ElementNode("p",contents);
+	}
+	,__class__: markdown.ParagraphSyntax
+});
+markdown.ListSyntax = function(listTag) {
+	markdown.BlockSyntax.call(this);
+	this.listTag = listTag;
+};
+$hxClasses["markdown.ListSyntax"] = markdown.ListSyntax;
+markdown.ListSyntax.__name__ = ["markdown","ListSyntax"];
+markdown.ListSyntax.__super__ = markdown.BlockSyntax;
+markdown.ListSyntax.prototype = $extend(markdown.BlockSyntax.prototype,{
+	get_canEndBlock: function() {
+		return false;
+	}
+	,listTag: null
+	,parse: function(parser) {
+		var items = [];
+		var childLines = [];
+		var endItem = function() {
+			if(childLines.length > 0) {
+				items.push(new markdown.ListItem(childLines));
+				childLines = [];
+			}
+		};
+		var match;
+		var tryMatch = function(pattern) {
+			match = pattern;
+			return pattern.match(parser.lines[parser.pos]);
+		};
+		while(!(parser.pos >= parser.lines.length)) {
+			if(tryMatch(markdown.BlockSyntax.RE_EMPTY)) childLines.push(""); else if(tryMatch(markdown.BlockSyntax.RE_UL) || tryMatch(markdown.BlockSyntax.RE_OL)) {
+				endItem();
+				childLines.push(match.matched(1));
+			} else if(tryMatch(markdown.BlockSyntax.RE_INDENT)) childLines.push(match.matched(1)); else if(markdown.BlockSyntax.isAtBlockEnd(parser)) break; else {
+				if(childLines.length > 0 && childLines[childLines.length - 1] == "") break;
+				childLines.push(parser.lines[parser.pos]);
+			}
+			parser.advance();
+		}
+		endItem();
+		var _g1 = 0;
+		var _g = items.length;
+		while(_g1 < _g) {
+			var i = _g1++;
+			var len = items[i].lines.length;
+			var _g3 = 1;
+			var _g2 = len + 1;
+			while(_g3 < _g2) {
+				var jj = _g3++;
+				var j = len - jj;
+				if(markdown.BlockSyntax.RE_EMPTY.match(items[i].lines[j])) {
+					if(i < items.length - 1) {
+						items[i].forceBlock = true;
+						items[i + 1].forceBlock = true;
+					}
+					items[i].lines.pop();
+				} else break;
+			}
+		}
+		var itemNodes = [];
+		var _g4 = 0;
+		while(_g4 < items.length) {
+			var item = items[_g4];
+			++_g4;
+			var blockItem = item.forceBlock || item.lines.length > 1;
+			var blocksInList = [markdown.BlockSyntax.RE_BLOCKQUOTE,markdown.BlockSyntax.RE_HEADER,markdown.BlockSyntax.RE_HR,markdown.BlockSyntax.RE_INDENT,markdown.BlockSyntax.RE_UL,markdown.BlockSyntax.RE_OL];
+			if(!blockItem) {
+				var _g11 = 0;
+				while(_g11 < blocksInList.length) {
+					var pattern1 = blocksInList[_g11];
+					++_g11;
+					if(pattern1.match(item.lines[0])) {
+						blockItem = true;
+						break;
+					}
+				}
+			}
+			if(blockItem) {
+				var children = parser.document.parseLines(item.lines);
+				if(!item.forceBlock && children.length == 1) {
+					if(js.Boot.__instanceof(children[0],markdown.ElementNode)) {
+						var node = children[0];
+						if(node.tag == "p") children = node.children;
+					}
+				}
+				itemNodes.push(new markdown.ElementNode("li",children));
+			} else {
+				var contents = parser.document.parseInline(item.lines[0]);
+				itemNodes.push(new markdown.ElementNode("li",contents));
+			}
+		}
+		return new markdown.ElementNode(this.listTag,itemNodes);
+	}
+	,__class__: markdown.ListSyntax
+});
+markdown.UnorderedListSyntax = function() {
+	markdown.ListSyntax.call(this,"ul");
+};
+$hxClasses["markdown.UnorderedListSyntax"] = markdown.UnorderedListSyntax;
+markdown.UnorderedListSyntax.__name__ = ["markdown","UnorderedListSyntax"];
+markdown.UnorderedListSyntax.__super__ = markdown.ListSyntax;
+markdown.UnorderedListSyntax.prototype = $extend(markdown.ListSyntax.prototype,{
+	get_pattern: function() {
+		return markdown.BlockSyntax.RE_UL;
+	}
+	,__class__: markdown.UnorderedListSyntax
+});
+markdown.OrderedListSyntax = function() {
+	markdown.ListSyntax.call(this,"ol");
+};
+$hxClasses["markdown.OrderedListSyntax"] = markdown.OrderedListSyntax;
+markdown.OrderedListSyntax.__name__ = ["markdown","OrderedListSyntax"];
+markdown.OrderedListSyntax.__super__ = markdown.ListSyntax;
+markdown.OrderedListSyntax.prototype = $extend(markdown.ListSyntax.prototype,{
+	get_pattern: function() {
+		return markdown.BlockSyntax.RE_OL;
+	}
+	,__class__: markdown.OrderedListSyntax
+});
+markdown.TableSyntax = function() {
+	markdown.BlockSyntax.call(this);
+};
+$hxClasses["markdown.TableSyntax"] = markdown.TableSyntax;
+markdown.TableSyntax.__name__ = ["markdown","TableSyntax"];
+markdown.TableSyntax.__super__ = markdown.BlockSyntax;
+markdown.TableSyntax.prototype = $extend(markdown.BlockSyntax.prototype,{
+	get_pattern: function() {
+		return markdown.TableSyntax.TABLE_PATTERN;
+	}
+	,get_canEndBlock: function() {
+		return false;
+	}
+	,parse: function(parser) {
+		var lines = [];
+		while(!(parser.pos >= parser.lines.length) && parser.matches(markdown.TableSyntax.TABLE_PATTERN)) {
+			lines.push(parser.lines[parser.pos]);
+			parser.advance();
+		}
+		var heads = [];
+		var rows = [];
+		var align = [];
+		var headLine = lines.shift();
+		var alignLine = lines.shift();
+		var aligns = [];
+		if(alignLine != null) markdown.TableSyntax.CELL_PATTERN.map(alignLine,function(e) {
+			var text = e.matched(2);
+			var align1;
+			if(text.charAt(0) == ":") {
+				if(text.charAt(text.length - 1) == ":") align1 = "center"; else align1 = "left";
+			} else if(text.charAt(text.length - 1) == ":") align1 = "right"; else align1 = "left";
+			aligns.push(align1);
+			return "";
+		});
+		var index = 0;
+		markdown.TableSyntax.CELL_PATTERN.map(headLine,function(e1) {
+			var text1 = StringTools.trim(e1.matched(2));
+			var cell = new markdown.ElementNode("th",parser.document.parseInline(text1));
+			if(aligns[index] != "left") cell.attributes.set("align",aligns[index]);
+			heads.push(cell);
+			index += 1;
+			return "";
+		});
+		var _g = 0;
+		while(_g < lines.length) {
+			var line = lines[_g];
+			++_g;
+			var cols = [[]];
+			rows.push(new markdown.ElementNode("tr",cols[0]));
+			var index1 = [0];
+			markdown.TableSyntax.CELL_PATTERN.map(line,(function(index1,cols) {
+				return function(e2) {
+					var text2 = StringTools.trim(e2.matched(2));
+					var cell1 = new markdown.ElementNode("td",parser.document.parseInline(text2));
+					if(aligns[index1[0]] != "left") cell1.attributes.set("align",aligns[index1[0]]);
+					cols[0].push(cell1);
+					index1[0] += 1;
+					return "";
+				};
+			})(index1,cols));
+		}
+		return new markdown.ElementNode("table",[new markdown.ElementNode("thead",heads),new markdown.ElementNode("tbody",rows)]);
+	}
+	,__class__: markdown.TableSyntax
+});
+markdown.HtmlRenderer = function() {
+};
+$hxClasses["markdown.HtmlRenderer"] = markdown.HtmlRenderer;
+markdown.HtmlRenderer.__name__ = ["markdown","HtmlRenderer"];
+markdown.HtmlRenderer.__interfaces__ = [markdown.NodeVisitor];
+markdown.HtmlRenderer.sortAttributes = function(a,b) {
+	var ia = HxOverrides.indexOf(markdown.HtmlRenderer.attributeOrder,a,0);
+	var ib = HxOverrides.indexOf(markdown.HtmlRenderer.attributeOrder,a,0);
+	if(ia > -1 && ib > -1) return ia - ib;
+	return Reflect.compare(a,b);
+};
+markdown.HtmlRenderer.prototype = {
+	buffer: null
+	,render: function(nodes) {
+		this.buffer = new StringBuf();
+		var _g = 0;
+		while(_g < nodes.length) {
+			var node = nodes[_g];
+			++_g;
+			node.accept(this);
+		}
+		return this.buffer.b;
+	}
+	,visitText: function(text) {
+		if(text.text == null) this.buffer.b += "null"; else this.buffer.b += "" + text.text;
+	}
+	,visitElementBefore: function(element) {
+		if(this.buffer.b != "" && markdown.HtmlRenderer.BLOCK_TAGS.match(element.tag)) this.buffer.b += "\n";
+		this.buffer.b += Std.string("<" + element.tag);
+		var attributeNames;
+		var _g = [];
+		var $it0 = element.attributes.keys();
+		while( $it0.hasNext() ) {
+			var k = $it0.next();
+			_g.push(k);
+		}
+		attributeNames = _g;
+		attributeNames.sort(markdown.HtmlRenderer.sortAttributes);
+		var _g1 = 0;
+		while(_g1 < attributeNames.length) {
+			var name = attributeNames[_g1];
+			++_g1;
+			this.buffer.add(" " + name + "=\"" + element.attributes.get(name) + "\"");
+		}
+		if(element.children == null) {
+			this.buffer.b += " />";
+			return false;
+		} else {
+			this.buffer.b += ">";
+			return true;
+		}
+	}
+	,visitElementAfter: function(element) {
+		this.buffer.b += Std.string("</" + element.tag + ">");
+	}
+	,__class__: markdown.HtmlRenderer
+};
+markdown.InlineSyntax = function(pattern) {
+	this.pattern = new EReg(pattern,"m");
+};
+$hxClasses["markdown.InlineSyntax"] = markdown.InlineSyntax;
+markdown.InlineSyntax.__name__ = ["markdown","InlineSyntax"];
+markdown.InlineSyntax.prototype = {
+	pattern: null
+	,tryMatch: function(parser) {
+		if(this.pattern.match(parser.get_currentSource()) && this.pattern.matchedPos().pos == 0) {
+			parser.writeText();
+			if(this.onMatch(parser)) parser.consume(this.pattern.matched(0).length);
+			return true;
+		}
+		return false;
+	}
+	,onMatch: function(parser) {
+		return false;
+	}
+	,__class__: markdown.InlineSyntax
+};
+markdown.AutolinkSyntaxWithoutBrackets = function() {
+	markdown.InlineSyntax.call(this,"\\b((http|https|ftp)://[^\\s]*)\\b");
+};
+$hxClasses["markdown.AutolinkSyntaxWithoutBrackets"] = markdown.AutolinkSyntaxWithoutBrackets;
+markdown.AutolinkSyntaxWithoutBrackets.__name__ = ["markdown","AutolinkSyntaxWithoutBrackets"];
+markdown.AutolinkSyntaxWithoutBrackets.__super__ = markdown.InlineSyntax;
+markdown.AutolinkSyntaxWithoutBrackets.prototype = $extend(markdown.InlineSyntax.prototype,{
+	tryMatch: function(parser) {
+		return markdown.InlineSyntax.prototype.tryMatch.call(this,parser);
+	}
+	,onMatch: function(parser) {
+		var url = this.pattern.matched(1);
+		var anchor = markdown.ElementNode.text("a",StringTools.htmlEscape(url));
+		anchor.attributes.set("href",url);
+		parser.addNode(anchor);
+		return true;
+	}
+	,__class__: markdown.AutolinkSyntaxWithoutBrackets
+});
+markdown.TextSyntax = function(pattern,substitute) {
+	markdown.InlineSyntax.call(this,pattern);
+	this.substitute = substitute;
+};
+$hxClasses["markdown.TextSyntax"] = markdown.TextSyntax;
+markdown.TextSyntax.__name__ = ["markdown","TextSyntax"];
+markdown.TextSyntax.__super__ = markdown.InlineSyntax;
+markdown.TextSyntax.prototype = $extend(markdown.InlineSyntax.prototype,{
+	substitute: null
+	,onMatch: function(parser) {
+		if(this.substitute == null) {
+			parser.advanceBy(this.pattern.matched(0).length);
+			return false;
+		}
+		parser.addNode(parser.createText(this.substitute));
+		return true;
+	}
+	,__class__: markdown.TextSyntax
+});
+markdown.AutolinkSyntax = function() {
+	markdown.InlineSyntax.call(this,"<((http|https|ftp)://[^>]*)>");
+};
+$hxClasses["markdown.AutolinkSyntax"] = markdown.AutolinkSyntax;
+markdown.AutolinkSyntax.__name__ = ["markdown","AutolinkSyntax"];
+markdown.AutolinkSyntax.__super__ = markdown.InlineSyntax;
+markdown.AutolinkSyntax.prototype = $extend(markdown.InlineSyntax.prototype,{
+	onMatch: function(parser) {
+		var url = this.pattern.matched(1);
+		var anchor = markdown.ElementNode.text("a",StringTools.htmlEscape(url));
+		anchor.attributes.set("href",url);
+		parser.addNode(anchor);
+		return true;
+	}
+	,__class__: markdown.AutolinkSyntax
+});
+markdown.TagSyntax = function(pattern,tag,end) {
+	markdown.InlineSyntax.call(this,pattern);
+	this.tag = tag;
+	this.endPattern = new EReg(end == null?pattern:end,"m");
+};
+$hxClasses["markdown.TagSyntax"] = markdown.TagSyntax;
+markdown.TagSyntax.__name__ = ["markdown","TagSyntax"];
+markdown.TagSyntax.__super__ = markdown.InlineSyntax;
+markdown.TagSyntax.prototype = $extend(markdown.InlineSyntax.prototype,{
+	endPattern: null
+	,tag: null
+	,onMatch: function(parser) {
+		parser.stack.push(new markdown.TagState(parser.pos,parser.pos + this.pattern.matched(0).length,this));
+		return true;
+	}
+	,onMatchEnd: function(parser,state) {
+		parser.addNode(new markdown.ElementNode(this.tag,state.children));
+		return true;
+	}
+	,__class__: markdown.TagSyntax
+});
+markdown.LinkSyntax = function(linkResolver) {
+	markdown.TagSyntax.call(this,"\\[",null,markdown.LinkSyntax.linkPattern);
+	this.linkResolver = linkResolver;
+};
+$hxClasses["markdown.LinkSyntax"] = markdown.LinkSyntax;
+markdown.LinkSyntax.__name__ = ["markdown","LinkSyntax"];
+markdown.LinkSyntax.__super__ = markdown.TagSyntax;
+markdown.LinkSyntax.prototype = $extend(markdown.TagSyntax.prototype,{
+	linkResolver: null
+	,onMatchEnd: function(parser,state) {
+		var url;
+		var title;
+		if(this.endPattern.matched(1) == null || this.endPattern.matched(1) == "") {
+			if(this.linkResolver == null) return false;
+			if(state.children.length != 1) return false;
+			if(!js.Boot.__instanceof(state.children[0],markdown.TextNode)) return false;
+			var link = state.children[0];
+			var node = this.linkResolver(link.text);
+			if(node == null) return false;
+			parser.addNode(node);
+			return true;
+		}
+		if(this.endPattern.matched(3) != null && this.endPattern.matched(3) != "") {
+			url = this.endPattern.matched(3);
+			title = this.endPattern.matched(4);
+			if(StringTools.startsWith(url,"<") && StringTools.endsWith(url,">")) url = url.substring(1,url.length - 1);
+		} else {
+			var id = this.endPattern.matched(2);
+			if(id == "") id = parser.source.substring(state.startPos + 1,parser.pos);
+			id = id.toLowerCase();
+			var link1 = parser.document.refLinks.get(id);
+			if(link1 == null) return false;
+			url = link1.url;
+			title = link1.title;
+		}
+		var anchor = new markdown.ElementNode("a",state.children);
+		var value = StringTools.htmlEscape(url);
+		anchor.attributes.set("href",value);
+		if(title != null && title != "") {
+			var value1 = StringTools.htmlEscape(title);
+			anchor.attributes.set("title",value1);
+		}
+		parser.addNode(anchor);
+		return true;
+	}
+	,__class__: markdown.LinkSyntax
+});
+markdown.ImgSyntax = function(linkResolver) {
+	markdown.TagSyntax.call(this,"!\\[",null,markdown.ImgSyntax.linkPattern);
+	this.linkResolver = linkResolver;
+};
+$hxClasses["markdown.ImgSyntax"] = markdown.ImgSyntax;
+markdown.ImgSyntax.__name__ = ["markdown","ImgSyntax"];
+markdown.ImgSyntax.__super__ = markdown.TagSyntax;
+markdown.ImgSyntax.prototype = $extend(markdown.TagSyntax.prototype,{
+	linkResolver: null
+	,onMatchEnd: function(parser,state) {
+		var url;
+		var title;
+		if(this.endPattern.matched(1) == null || this.endPattern.matched(1) == "") {
+			if(this.linkResolver == null) return false;
+			if(state.children.length != 1) return false;
+			if(!js.Boot.__instanceof(state.children[0],markdown.TextNode)) return false;
+			var link = state.children[0];
+			var node = this.linkResolver(link.text);
+			if(node == null) return false;
+			parser.addNode(node);
+			return true;
+		}
+		if(this.endPattern.matched(3) != null && this.endPattern.matched(3) != "") {
+			url = this.endPattern.matched(3);
+			title = this.endPattern.matched(4);
+			if(StringTools.startsWith(url,"<") && StringTools.endsWith(url,">")) url = url.substring(1,url.length - 1);
+		} else {
+			var id = this.endPattern.matched(2);
+			if(id == "") id = parser.source.substring(state.startPos + 1,parser.pos);
+			id = id.toLowerCase();
+			var link1 = parser.document.refLinks.get(id);
+			if(link1 == null) return false;
+			url = link1.url;
+			title = link1.title;
+		}
+		var img = new markdown.ElementNode("img",null);
+		var value = StringTools.htmlEscape(url);
+		img.attributes.set("src",value);
+		if(state.children.length == 1 && js.Boot.__instanceof(state.children[0],markdown.TextNode)) {
+			var alt = state.children[0];
+			img.attributes.set("alt",alt.text);
+		}
+		if(title != null && title != "") {
+			var value1 = StringTools.htmlEscape(title);
+			img.attributes.set("title",value1);
+		}
+		parser.addNode(img);
+		return true;
+	}
+	,__class__: markdown.ImgSyntax
+});
+markdown.CodeSyntax = function(pattern) {
+	markdown.InlineSyntax.call(this,pattern);
+};
+$hxClasses["markdown.CodeSyntax"] = markdown.CodeSyntax;
+markdown.CodeSyntax.__name__ = ["markdown","CodeSyntax"];
+markdown.CodeSyntax.__super__ = markdown.InlineSyntax;
+markdown.CodeSyntax.prototype = $extend(markdown.InlineSyntax.prototype,{
+	onMatch: function(parser) {
+		parser.addNode(markdown.ElementNode.text("code",StringTools.htmlEscape(this.pattern.matched(1))));
+		return true;
+	}
+	,__class__: markdown.CodeSyntax
+});
+markdown.InlineParser = function(source,document) {
+	this.start = 0;
+	this.pos = 0;
+	this.source = source;
+	this.document = document;
+	this.stack = [];
+	if(document.inlineSyntaxes != null) {
+		this.syntaxes = [];
+		var _g = 0;
+		var _g1 = document.inlineSyntaxes;
+		while(_g < _g1.length) {
+			var syntax = _g1[_g];
+			++_g;
+			this.syntaxes.push(syntax);
+		}
+		var _g2 = 0;
+		var _g11 = markdown.InlineParser.defaultSyntaxes;
+		while(_g2 < _g11.length) {
+			var syntax1 = _g11[_g2];
+			++_g2;
+			this.syntaxes.push(syntax1);
+		}
+	} else this.syntaxes = markdown.InlineParser.defaultSyntaxes;
+	var x = new markdown.LinkSyntax(document.linkResolver);
+	this.syntaxes.splice(1,0,x);
+};
+$hxClasses["markdown.InlineParser"] = markdown.InlineParser;
+markdown.InlineParser.__name__ = ["markdown","InlineParser"];
+markdown.InlineParser.prototype = {
+	source: null
+	,document: null
+	,syntaxes: null
+	,pos: null
+	,start: null
+	,stack: null
+	,parse: function() {
+		this.stack.push(new markdown.TagState(0,0,null));
+		while(!this.get_isDone()) {
+			var matched = false;
+			var _g1 = 1;
+			var _g = this.stack.length;
+			while(_g1 < _g) {
+				var i = _g1++;
+				if(this.stack[this.stack.length - i].tryMatch(this)) {
+					matched = true;
+					break;
+				}
+			}
+			if(matched) continue;
+			var _g2 = 0;
+			var _g11 = this.syntaxes;
+			while(_g2 < _g11.length) {
+				var syntax = _g11[_g2];
+				++_g2;
+				if(syntax.tryMatch(this)) {
+					matched = true;
+					break;
+				}
+			}
+			if(matched) continue;
+			this.advanceBy(1);
+		}
+		return this.stack[0].close(this);
+	}
+	,writeText: function() {
+		this.writeTextRange(this.start,this.pos);
+		this.start = this.pos;
+	}
+	,writeTextRange: function(start,end) {
+		if(end > start) {
+			var text = this.source.substring(start,end);
+			var nodes = this.stack[this.stack.length - 1].children;
+			if(nodes.length > 0 && js.Boot.__instanceof(nodes[nodes.length - 1],markdown.TextNode)) {
+				var lastNode = nodes[nodes.length - 1];
+				var newNode = this.createText("" + lastNode.text + text);
+				nodes[nodes.length - 1] = newNode;
+			} else nodes.push(this.createText(text));
+		}
+	}
+	,createText: function(text) {
+		return new markdown.TextNode(this.unescape(text));
+	}
+	,addNode: function(node) {
+		this.stack[this.stack.length - 1].children.push(node);
+	}
+	,get_currentSource: function() {
+		return this.source.substring(this.pos,this.source.length);
+	}
+	,get_isDone: function() {
+		return this.pos == this.source.length;
+	}
+	,advanceBy: function(length) {
+		this.pos += length;
+	}
+	,consume: function(length) {
+		this.pos += length;
+		this.start = this.pos;
+	}
+	,unescape: function(text) {
+		text = new EReg("\\\\([\\\\`*_{}[\\]()#+-.!])","g").replace(text,"$1");
+		text = StringTools.replace(text,"\t","    ");
+		return text;
+	}
+	,__class__: markdown.InlineParser
+	,__properties__: {get_isDone:"get_isDone",get_currentSource:"get_currentSource"}
+};
+markdown.TagState = function(startPos,endPos,syntax) {
+	this.startPos = startPos;
+	this.endPos = endPos;
+	this.syntax = syntax;
+	this.children = [];
+};
+$hxClasses["markdown.TagState"] = markdown.TagState;
+markdown.TagState.__name__ = ["markdown","TagState"];
+markdown.TagState.prototype = {
+	startPos: null
+	,endPos: null
+	,syntax: null
+	,children: null
+	,tryMatch: function(parser) {
+		if(this.syntax.endPattern.match(parser.get_currentSource()) && this.syntax.endPattern.matchedPos().pos == 0) {
+			this.close(parser);
+			return true;
+		}
+		return false;
+	}
+	,close: function(parser) {
+		var index = HxOverrides.indexOf(parser.stack,this,0);
+		var unmatchedTags = parser.stack.splice(index + 1,parser.stack.length - index);
+		var _g = 0;
+		while(_g < unmatchedTags.length) {
+			var unmatched = unmatchedTags[_g];
+			++_g;
+			parser.writeTextRange(unmatched.startPos,unmatched.endPos);
+			var _g1 = 0;
+			var _g2 = unmatched.children;
+			while(_g1 < _g2.length) {
+				var child = _g2[_g1];
+				++_g1;
+				this.children.push(child);
+			}
+		}
+		parser.writeText();
+		parser.stack.pop();
+		if(parser.stack.length == 0) return this.children;
+		if(this.syntax.onMatchEnd(parser,this)) parser.consume(this.syntax.endPattern.matched(0).length); else {
+			parser.start = this.startPos;
+			parser.advanceBy(this.syntax.endPattern.matched(0).length);
+		}
+		return null;
+	}
+	,__class__: markdown.TagState
+};
 function $iterator(o) { if( o instanceof Array ) return function() { return HxOverrides.iter(o); }; return typeof(o.iterator) == 'function' ? $bind(o,o.iterator) : o.iterator; }
 var $_, $fid = 0;
 function $bind(o,m) { if( m == null ) return null; if( m.__id__ == null ) m.__id__ = $fid++; var f; if( o.hx__closures__ == null ) o.hx__closures__ = {}; else f = o.hx__closures__[m.__id__]; if( f == null ) { f = function(){ return f.method.apply(f.scope, arguments); }; f.scope = o; f.method = m; o.hx__closures__[m.__id__] = f; } return f; }
@@ -3777,7 +4848,7 @@ if(Array.prototype.filter == null) Array.prototype.filter = function(f1) {
 	}
 	return a1;
 };
-haxe.Resource.content = [{ name : "ArticlesTemplate", data : "PHVsPg0KOjpmb3JlYWNoIGFydGljbGVzOjoNCiAgPGxpPjxhIGhyZWY9IiMvY29udGVudHMvOjpfX2N1cnJlbnRfXy5wYXRoOjoiPjo6X19jdXJyZW50X18ubmFtZTo6PC9hPjwvbGk+DQo6OmVuZDo6DQo8L3VsPg"},{ name : "ContentTemplate", data : "PGgxPjo6dGl0bGU6OjwvaDE+DQo8cHJlPjo6Ym9keTo6PC9wcmU+"},{ name : "UserTemplate", data : "PHVsPg0KPGxpPjo6dXNlci5uYW1lOjo8L2xpPg0KPGxpPjo6dXNlci5sb2dpbjo6PC9saT4NCjxsaT46OnVzZXIubG9jYXRpb246OjwvbGk+DQo8bGk+Ojp1c2VyLmVtYWlsOjo8L2xpPg0KPGxpPjxhIGhyZWY9Ijo6dXNlci51cmw6OiI+VmlldyBvbiBHaXRIdWI8L2E+PC9saT4NCjwvdWw+"},{ name : "RepositoriesTemplate", data : "PHVsPg0KOjpmb3JlYWNoIHJlcG9zaXRvcmllczo6DQogIDxsaT46Ol9fY3VycmVudF9fLm5hbWU6OjwvbGk+DQo6OmVuZDo6DQo8L3VsPg"}];
+haxe.Resource.content = [{ name : "ArticlesTemplate", data : "PHVsPg0KOjpmb3JlYWNoIGFydGljbGVzOjoNCiAgPGxpPjxhIGhyZWY9IiMvY29udGVudHMvOjpfX2N1cnJlbnRfXy5wYXRoOjoiPjo6X19jdXJyZW50X18ubmFtZTo6PC9hPjwvbGk+DQo6OmVuZDo6DQo8L3VsPg"},{ name : "ContentTemplate", data : "PGRpdj5Xcml0dGVuIG9uIDo6dGltZXN0YW1wOjo8L2Rpdj4NCjo6Ym9keTo6"},{ name : "UserTemplate", data : "PHVsPg0KPGxpPjo6dXNlci5uYW1lOjo8L2xpPg0KPGxpPjo6dXNlci5sb2dpbjo6PC9saT4NCjxsaT46OnVzZXIubG9jYXRpb246OjwvbGk+DQo8bGk+Ojp1c2VyLmVtYWlsOjo8L2xpPg0KPGxpPjxhIGhyZWY9Ijo6dXNlci51cmw6OiI+VmlldyBvbiBHaXRIdWI8L2E+PC9saT4NCjwvdWw+"},{ name : "RepositoriesTemplate", data : "PHVsPg0KOjpmb3JlYWNoIHJlcG9zaXRvcmllczo6DQogIDxsaT46Ol9fY3VycmVudF9fLm5hbWU6OjwvbGk+DQo6OmVuZDo6DQo8L3VsPg"}];
 haxe.Serializer.USE_CACHE = false;
 haxe.Serializer.USE_ENUM_INDEX = false;
 haxe.Serializer.BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789%:";
@@ -3795,5 +4866,22 @@ haxe.crypto.Base64.BYTES = haxe.io.Bytes.ofString(haxe.crypto.Base64.CHARS);
 haxe.ds.ObjectMap.count = 0;
 haxe.io.Output.LN2 = Math.log(2);
 haxe.remoting.HttpConnection.TIMEOUT = 10.;
+markdown.BlockSyntax.RE_EMPTY = new EReg("^([ \\t]*)$","");
+markdown.BlockSyntax.RE_SETEXT = new EReg("^((=+)|(-+))$","");
+markdown.BlockSyntax.RE_HEADER = new EReg("^(#{1,6})(.*?)#*$","");
+markdown.BlockSyntax.RE_BLOCKQUOTE = new EReg("^[ ]{0,3}>[ ]?(.*)$","");
+markdown.BlockSyntax.RE_INDENT = new EReg("^(?:    |\t)(.*)$","");
+markdown.BlockSyntax.RE_CODE = new EReg("^```(\\w*)\\s*$","");
+markdown.BlockSyntax.RE_HR = new EReg("^[ ]{0,3}((-+[ ]{0,2}){3,}|(_+[ ]{0,2}){3,}|(\\*+[ ]{0,2}){3,})$","");
+markdown.BlockSyntax.RE_HTML = new EReg("^<[ ]*\\w+[ >]","");
+markdown.BlockSyntax.RE_UL = new EReg("^[ ]{0,3}[*+-][ \\t]+(.*)$","");
+markdown.BlockSyntax.RE_OL = new EReg("^[ ]{0,3}\\d+\\.[ \\t]+(.*)$","");
+markdown.TableSyntax.TABLE_PATTERN = new EReg("^(.+? +:?\\|:? +)+(.+)$","");
+markdown.TableSyntax.CELL_PATTERN = new EReg("(\\|)?([^\\|]+)(\\|)?","g");
+markdown.HtmlRenderer.BLOCK_TAGS = new EReg("blockquote|h1|h2|h3|h4|h5|h6|hr|p|pre","");
+markdown.HtmlRenderer.attributeOrder = ["src","alt"];
+markdown.LinkSyntax.linkPattern = "\\](?:(" + "\\s?\\[([^\\]]*)\\]" + "|" + "\\s?\\(([^ )]+)(?:[ ]*\"([^\"]+)\"|)\\)" + ")|)";
+markdown.ImgSyntax.linkPattern = "\\](?:(" + "\\s?\\[([^\\]]*)\\]" + "|" + "\\s?\\(([^ )]+)(?:[ ]*\"([^\"]+)\"|)\\)" + ")|)";
+markdown.InlineParser.defaultSyntaxes = [new markdown.AutolinkSyntaxWithoutBrackets(),new markdown.TextSyntax(" {2,}\n","<br />\n"),new markdown.TextSyntax("\\s*[A-Za-z0-9]+"),new markdown.AutolinkSyntax(),new markdown.LinkSyntax(),new markdown.ImgSyntax(),new markdown.TextSyntax(" \\* "),new markdown.TextSyntax(" _ "),new markdown.TextSyntax("&[#a-zA-Z0-9]*;"),new markdown.TextSyntax("&","&amp;"),new markdown.TextSyntax("</?\\w+.*?>"),new markdown.TextSyntax("<","&lt;"),new markdown.TagSyntax("\\*\\*","strong"),new markdown.TagSyntax("__","strong"),new markdown.TagSyntax("\\*","em"),new markdown.TagSyntax("\\b_","em","_\\b"),new markdown.CodeSyntax("``\\s?((?:.|\\n)*?)\\s?``"),new markdown.CodeSyntax("`([^`]*)`")];
 gitblog.GitBlog.main();
 })();
