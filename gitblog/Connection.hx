@@ -1,76 +1,91 @@
 package gitblog;
-import haxe.Http;
 
 /**
  * `Http` wrapper for ease of use.
  * @author Domagoj Štrekelj
  */
-class Connection extends Http
+class Connection extends haxe.Http
 {
-	/**
-	 * Creates new connection to specified URL.
-	 * @param	URL
-	 */
-	public function new(URL : String) 
-	{
-		super(URL);
-	}
-	
-	/**
-	 * GET request.
-	 * @return	`Connection` object for chaining
-	 */
-	public function get() : Connection
-	{
-		super.request(false);
-		
-		return this;
-	}
-	
-	/**
-	 * Called on successful request.
-	 * @param	Callback
-	 * @return	`Connection` object for chaining
-	 */
-	public function onSuccess(Callback : String->Void) : Connection
-	{
-		this.onData = Callback;
-		
-		return this;
-	}
-	
-	/**
-	 * Called on failed request.
-	 * @param	Callback
-	 * @return	`Connection` object for chaining
-	 */
-	public function onFailure(Callback : String->Void) : Connection
-	{
-		this.onError = Callback;
-		
-		return this;
-	}
-	
-	/**
-	 * Called on HTTP status change.
-	 * @param	Callback
-	 * @return	`Connection` object for chaining
-	 */
-	public function onChange(Callback : Int->Void) : Connection
-	{
-		this.onStatus = Callback;
-		
-		return this;
-	}
-	
-	/**
-	 * POST request.
-	 * @return	`Connection` object for chaining
-	 */
-	public function post() : Connection
-	{
-		super.request(true);
-		
-		return this;
-	}
+  var baseURL : String;
+
+  /**
+   * Creates new connection to specified base URL.
+   * @param baseURL `String` base URL
+   */
+  public function new(baseURL : String) 
+  {
+    this.baseURL = baseURL;
+    super(this.baseURL);
+  }
+  
+  /**
+   * GET request.
+   * @return  `Connection` object for chaining
+   */
+  public function get() : Connection
+  {
+    super.request(false);
+    
+    return this;
+  }
+
+  /**
+   * Called on HTTP status change. HTTP status is passed to callback.
+   * @param   callback  `Int->Void` callback function
+   * @return            `Connection` object for chaining
+   */
+  public function onChange(callback : Int->Void) : Connection
+  {
+    this.onStatus = callback;
+    
+    return this;
+  }
+
+  /**
+   * Called on failed request. Response is passed to callback.
+   * @param   callback  `String->Void` callback function
+   * @return            `Connection` object for chaining
+   */
+  public function onFailure(callback : String->Void) : Connection
+  {
+    this.onError = callback;
+    
+    return this;
+  }
+  
+
+  /**
+   * Called on successful request. Response is passed to callback.
+   * @param    callback   `String->Void` callback function
+   * @return              `Connection` object for chaining
+   */
+  public function onSuccess(callback : String->Void) : Connection
+  {
+    this.onData = callback;
+    
+    return this;
+  }
+
+  /**
+   * Appends a parameters string to the base URL.
+   * @param  params `String` parameters
+   * @return        `Connection` object for chaining
+   */
+  public function parameters(params : String) : Connection
+  {
+    this.url = baseURL + params;
+
+    return this;
+  }
+
+  /**
+   * POST request.
+   * @return  `Connection` object for chaining
+   */
+  public function post() : Connection
+  {
+    super.request(true);
+    
+    return this;
+  }
 }

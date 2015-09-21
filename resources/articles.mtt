@@ -1,0 +1,5 @@
+<ul>
+::foreach articles::
+  <li><a href="#/contents/::__current__.path::">::__current__.name::</a></li>
+::end::
+</ul>

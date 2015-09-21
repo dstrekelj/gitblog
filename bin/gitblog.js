@@ -897,6 +897,7 @@ frank.App.prototype = {
 	,router: function(event) {
 		var hash = HxOverrides.substr(window.location.hash,1,null);
 		var route = this.findRoute(hash);
+		haxe.Log.trace(hash,{ fileName : "App.hx", lineNumber : 32, className : "frank.App", methodName : "router"});
 		if(route != null) {
 			var controller = this.routes.h[route.__id__];
 			if(this.context != null) this.context.onExit(hash);
@@ -1073,27 +1074,33 @@ haxe.Http.prototype = {
 	,__class__: haxe.Http
 };
 var gitblog = {};
-gitblog.Connection = function(URL) {
-	haxe.Http.call(this,URL);
+gitblog.Connection = function(baseURL) {
+	this.baseURL = baseURL;
+	haxe.Http.call(this,this.baseURL);
 };
 $hxClasses["gitblog.Connection"] = gitblog.Connection;
 gitblog.Connection.__name__ = ["gitblog","Connection"];
 gitblog.Connection.__super__ = haxe.Http;
 gitblog.Connection.prototype = $extend(haxe.Http.prototype,{
-	get: function() {
+	baseURL: null
+	,get: function() {
 		haxe.Http.prototype.request.call(this,false);
 		return this;
 	}
-	,onSuccess: function(Callback) {
-		this.onData = Callback;
+	,onChange: function(callback) {
+		this.onStatus = callback;
 		return this;
 	}
-	,onFailure: function(Callback) {
-		this.onError = Callback;
+	,onFailure: function(callback) {
+		this.onError = callback;
 		return this;
 	}
-	,onChange: function(Callback) {
-		this.onStatus = Callback;
+	,onSuccess: function(callback) {
+		this.onData = callback;
+		return this;
+	}
+	,parameters: function(params) {
+		this.url = this.baseURL + params;
 		return this;
 	}
 	,post: function() {
@@ -1103,7 +1110,7 @@ gitblog.Connection.prototype = $extend(haxe.Http.prototype,{
 	,__class__: gitblog.Connection
 });
 gitblog.GitBlog = function() {
-	new frank.App().route(new EReg("^/$",""),new gitblog.controllers.HomeController()).route(new EReg("^/about/$",""),new gitblog.controllers.AboutController());
+	new frank.App().route(new EReg("^/$",""),new gitblog.controllers.HomeController()).route(new EReg("^/contents/(.*)$",""),new gitblog.controllers.ContentsController());
 };
 $hxClasses["gitblog.GitBlog"] = gitblog.GitBlog;
 gitblog.GitBlog.__name__ = ["gitblog","GitBlog"];
@@ -1120,7 +1127,7 @@ gitblog.GitHubAPI = function(username) {
 	this.username = username;
 	this.user = new gitblog.Connection("https://api.github.com/users/" + username);
 	this.repos = new gitblog.Connection("https://api.github.com/users/" + username + "/repos");
-	this.contents = new gitblog.Connection("https://api.github.com/repos/" + username + "/gitblog-content/contents/other/");
+	this.contents = new gitblog.Connection("https://api.github.com/repos/" + username + "/gitblog-content/contents").parameters("/other");
 };
 $hxClasses["gitblog.GitHubAPI"] = gitblog.GitHubAPI;
 gitblog.GitHubAPI.__name__ = ["gitblog","GitHubAPI"];
@@ -1136,23 +1143,34 @@ $hxClasses["gitblog.Views"] = gitblog.Views;
 gitblog.Views.__name__ = ["gitblog","Views"];
 gitblog.Views.userView = null;
 gitblog.Views.repositoriesView = null;
+gitblog.Views.articlesView = null;
+gitblog.Views.contentView = null;
 gitblog.Views.init = function() {
 	gitblog.Views.userView = new frank.View("user","UserTemplate");
 	gitblog.Views.repositoriesView = new frank.View("repositories","RepositoriesTemplate");
+	gitblog.Views.articlesView = new frank.View("articles","ArticlesTemplate");
+	gitblog.Views.contentView = new frank.View("content","ContentTemplate");
 };
 gitblog.controllers = {};
-gitblog.controllers.AboutController = function() {
+gitblog.controllers.ContentsController = function() {
+	this.content = new gitblog.Connection("https://api.github.com/repos/dstrekelj/gitblog-content");
 };
-$hxClasses["gitblog.controllers.AboutController"] = gitblog.controllers.AboutController;
-gitblog.controllers.AboutController.__name__ = ["gitblog","controllers","AboutController"];
-gitblog.controllers.AboutController.__interfaces__ = [frank.Controller];
-gitblog.controllers.AboutController.prototype = {
-	onEnter: function(hash) {
-		window.document.getElementById("about").innerHTML = "HELLO FROM ABOUTCONTROLLER!";
+$hxClasses["gitblog.controllers.ContentsController"] = gitblog.controllers.ContentsController;
+gitblog.controllers.ContentsController.__name__ = ["gitblog","controllers","ContentsController"];
+gitblog.controllers.ContentsController.__interfaces__ = [frank.Controller];
+gitblog.controllers.ContentsController.prototype = {
+	content: null
+	,onEnter: function(hash) {
+		this.content.parameters(hash).onSuccess(function(response) {
+			var data = JSON.parse(response);
+			gitblog.Views.contentView.update({ title : data.name, body : window.atob(data.content)});
+		}).onFailure(function(response1) {
+			haxe.Log.trace("FAILURE: " + response1,{ fileName : "ContentsController.hx", lineNumber : 23, className : "gitblog.controllers.ContentsController", methodName : "onEnter"});
+		}).get();
 	}
 	,onExit: function(hash) {
 	}
-	,__class__: gitblog.controllers.AboutController
+	,__class__: gitblog.controllers.ContentsController
 };
 gitblog.controllers.HomeController = function() {
 	gitblog.GitBlog.api.user.onSuccess(function(Data) {
@@ -1172,13 +1190,21 @@ gitblog.controllers.HomeController = function() {
 	}).onChange(function(Status1) {
 		haxe.Log.trace(Status1,{ fileName : "HomeController.hx", lineNumber : 30, className : "gitblog.controllers.HomeController", methodName : "new"});
 	}).get();
+	gitblog.GitBlog.api.contents.onSuccess(function(Data2) {
+		var contents = JSON.parse(Data2);
+		gitblog.Views.articlesView.update({ articles : contents});
+	}).onFailure(function(Message2) {
+		haxe.Log.trace(Message2,{ fileName : "HomeController.hx", lineNumber : 38, className : "gitblog.controllers.HomeController", methodName : "new"});
+	}).onChange(function(Status2) {
+		haxe.Log.trace(Status2,{ fileName : "HomeController.hx", lineNumber : 39, className : "gitblog.controllers.HomeController", methodName : "new"});
+	}).get();
 };
 $hxClasses["gitblog.controllers.HomeController"] = gitblog.controllers.HomeController;
 gitblog.controllers.HomeController.__name__ = ["gitblog","controllers","HomeController"];
 gitblog.controllers.HomeController.__interfaces__ = [frank.Controller];
 gitblog.controllers.HomeController.prototype = {
 	onEnter: function(hash) {
-		haxe.Log.trace(hash,{ fileName : "HomeController.hx", lineNumber : 34, className : "gitblog.controllers.HomeController", methodName : "onEnter"});
+		haxe.Log.trace(hash,{ fileName : "HomeController.hx", lineNumber : 43, className : "gitblog.controllers.HomeController", methodName : "onEnter"});
 	}
 	,onExit: function(hash) {
 	}
@@ -3751,7 +3777,7 @@ if(Array.prototype.filter == null) Array.prototype.filter = function(f1) {
 	}
 	return a1;
 };
-haxe.Resource.content = [{ name : "UserTemplate", data : "PHVsPg0KPGxpPjo6dXNlci5uYW1lOjo8L2xpPg0KPGxpPjo6dXNlci5sb2dpbjo6PC9saT4NCjxsaT46OnVzZXIubG9jYXRpb246OjwvbGk+DQo8bGk+Ojp1c2VyLmVtYWlsOjo8L2xpPg0KPGxpPjxhIGhyZWY9Ijo6dXNlci51cmw6OiI+VmlldyBvbiBHaXRIdWI8L2E+PC9saT4NCjwvdWw+"},{ name : "RepositoriesTemplate", data : "PHVsPg0KOjpmb3JlYWNoIHJlcG9zaXRvcmllczo6DQogIDxsaT46Ol9fY3VycmVudF9fLm5hbWU6OjwvbGk+DQo6OmVuZDo6DQo8L3VsPg"}];
+haxe.Resource.content = [{ name : "ArticlesTemplate", data : "PHVsPg0KOjpmb3JlYWNoIGFydGljbGVzOjoNCiAgPGxpPjxhIGhyZWY9IiMvY29udGVudHMvOjpfX2N1cnJlbnRfXy5wYXRoOjoiPjo6X19jdXJyZW50X18ubmFtZTo6PC9hPjwvbGk+DQo6OmVuZDo6DQo8L3VsPg"},{ name : "ContentTemplate", data : "PGgxPjo6dGl0bGU6OjwvaDE+DQo8cHJlPjo6Ym9keTo6PC9wcmU+"},{ name : "UserTemplate", data : "PHVsPg0KPGxpPjo6dXNlci5uYW1lOjo8L2xpPg0KPGxpPjo6dXNlci5sb2dpbjo6PC9saT4NCjxsaT46OnVzZXIubG9jYXRpb246OjwvbGk+DQo8bGk+Ojp1c2VyLmVtYWlsOjo8L2xpPg0KPGxpPjxhIGhyZWY9Ijo6dXNlci51cmw6OiI+VmlldyBvbiBHaXRIdWI8L2E+PC9saT4NCjwvdWw+"},{ name : "RepositoriesTemplate", data : "PHVsPg0KOjpmb3JlYWNoIHJlcG9zaXRvcmllczo6DQogIDxsaT46Ol9fY3VycmVudF9fLm5hbWU6OjwvbGk+DQo6OmVuZDo6DQo8L3VsPg"}];
 haxe.Serializer.USE_CACHE = false;
 haxe.Serializer.USE_ENUM_INDEX = false;
 haxe.Serializer.BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789%:";

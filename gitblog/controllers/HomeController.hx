@@ -29,6 +29,15 @@ class HomeController implements frank.Controller
       .onFailure(function(Message : String) { trace(Message); })
       .onChange(function(Status : Int) { trace(Status); })
       .get();
+
+    GitBlog.api.contents
+      .onSuccess(function(Data : String) {
+        var contents : gitblog.Responses.ContentsResponse = haxe.Json.parse(Data);
+        gitblog.Views.articlesView.update({ articles : contents });
+      })
+      .onFailure(function(Message : String) { trace(Message); })
+      .onChange(function(Status : Int) { trace(Status); })
+      .get();
   }
 
   public function onEnter(hash : String) : Void { trace(hash); }

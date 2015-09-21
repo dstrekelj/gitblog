@@ -29,7 +29,7 @@ class App
   {
     var hash : String = js.Browser.location.hash.substr(1);
     var route : EReg = findRoute(hash);
-
+    trace(hash);
     if (route != null)
     {
       var controller : Controller = routes.get(route);

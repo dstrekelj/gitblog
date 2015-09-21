@@ -1,5 +1,7 @@
 -resource resources/user.mtt@UserTemplate
 -resource resources/repositories.mtt@RepositoriesTemplate
+-resource resources/articles.mtt@ArticlesTemplate
+-resource resources/content.mtt@ContentTemplate
 
 -dce no
 

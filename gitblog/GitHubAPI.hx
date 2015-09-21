@@ -17,6 +17,6 @@ class GitHubAPI
     
     user = new Connection('https://api.github.com/users/${username}');
     repos = new Connection('https://api.github.com/users/${username}/repos');
-    contents = new Connection('https://api.github.com/repos/${username}/gitblog-content/contents/other/');
+    contents = new Connection('https://api.github.com/repos/${username}/gitblog-content/contents').parameters('/other');
   }
 }

@@ -17,6 +17,6 @@ class GitBlog
   {
     new frank.App()
         .route(~/^\/$/, new gitblog.controllers.HomeController())
-        .route(~/^\/about\/$/, new gitblog.controllers.AboutController());
+        .route(~/^\/contents\/(.*)$/, new gitblog.controllers.ContentsController());
   }
 }
