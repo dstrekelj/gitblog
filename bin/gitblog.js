@@ -972,35 +972,29 @@ Type.allEnums = function(e) {
 };
 var frank = {};
 frank.App = function() {
-	this.routes = new haxe.ds.ObjectMap();
-	this.context = null;
+	this.routes = new Array();
 	window.addEventListener("hashchange",$bind(this,this.router));
 };
 $hxClasses["frank.App"] = frank.App;
 frank.App.__name__ = ["frank","App"];
 frank.App.prototype = {
 	routes: null
-	,context: null
-	,route: function(route,controller) {
-		this.routes.set(route,controller);
+	,route: function(route) {
+		this.routes.push(route);
 		return this;
 	}
 	,router: function(event) {
 		var hash = HxOverrides.substr(window.location.hash,1,null);
 		var route = this.findRoute(hash);
-		haxe.Log.trace(hash,{ fileName : "App.hx", lineNumber : 32, className : "frank.App", methodName : "router"});
-		if(route != null) {
-			var controller = this.routes.h[route.__id__];
-			if(this.context != null) this.context.onExit(hash);
-			this.context = controller;
-			this.context.onEnter(hash);
-		} else haxe.Log.trace("ERROR: Unmatched route.",{ fileName : "App.hx", lineNumber : 45, className : "frank.App", methodName : "router"});
+		if(route != null) route.controller.enter(hash); else haxe.Log.trace("ERROR: Unmatched route.",{ fileName : "App.hx", lineNumber : 48, className : "frank.App", methodName : "router"});
 	}
 	,findRoute: function(hash) {
-		var $it0 = this.routes.keys();
-		while( $it0.hasNext() ) {
-			var route = $it0.next();
-			if(route.match(hash)) return route;
+		var _g = 0;
+		var _g1 = this.routes;
+		while(_g < _g1.length) {
+			var route = _g1[_g];
+			++_g;
+			if(route.path.match(hash)) return route;
 		}
 		return null;
 	}
@@ -1010,8 +1004,7 @@ frank.Controller = function() { };
 $hxClasses["frank.Controller"] = frank.Controller;
 frank.Controller.__name__ = ["frank","Controller"];
 frank.Controller.prototype = {
-	onEnter: null
-	,onExit: null
+	enter: null
 	,__class__: frank.Controller
 };
 frank.View = function(parentElementID,templateName) {
@@ -1201,127 +1194,170 @@ gitblog.Connection.prototype = $extend(haxe.Http.prototype,{
 	,__class__: gitblog.Connection
 });
 gitblog.GitBlog = function() {
-	new frank.App().route(new EReg("^/$",""),new gitblog.controllers.HomeController()).route(new EReg("^/contents/(.*)$",""),new gitblog.controllers.ContentsController());
+	new frank.App().route({ path : new EReg("^/$",""), controller : new gitblog.controllers.HomeController()}).route({ path : new EReg("^/contents/(.*)$",""), controller : new gitblog.controllers.ContentsController()});
 };
 $hxClasses["gitblog.GitBlog"] = gitblog.GitBlog;
 gitblog.GitBlog.__name__ = ["gitblog","GitBlog"];
-gitblog.GitBlog.api = null;
 gitblog.GitBlog.main = function() {
-	gitblog.GitBlog.api = new gitblog.GitHubAPI("dstrekelj");
-	gitblog.Views.init();
 	new gitblog.GitBlog();
 };
 gitblog.GitBlog.prototype = {
 	__class__: gitblog.GitBlog
 };
-gitblog.GitHubAPI = function(username) {
-	this.username = username;
-	this.user = new gitblog.Connection("https://api.github.com/users/" + username);
-	this.repos = new gitblog.Connection("https://api.github.com/users/" + username + "/repos");
-	this.contents = new gitblog.Connection("https://api.github.com/repos/" + username + "/gitblog-content/contents").parameters("/other");
-};
-$hxClasses["gitblog.GitHubAPI"] = gitblog.GitHubAPI;
-gitblog.GitHubAPI.__name__ = ["gitblog","GitHubAPI"];
-gitblog.GitHubAPI.prototype = {
-	username: null
-	,user: null
-	,repos: null
-	,contents: null
-	,__class__: gitblog.GitHubAPI
-};
-gitblog.Views = function() { };
-$hxClasses["gitblog.Views"] = gitblog.Views;
-gitblog.Views.__name__ = ["gitblog","Views"];
-gitblog.Views.userView = null;
-gitblog.Views.repositoriesView = null;
-gitblog.Views.articlesView = null;
-gitblog.Views.contentView = null;
-gitblog.Views.init = function() {
-	gitblog.Views.userView = new frank.View("user","UserTemplate");
-	gitblog.Views.repositoriesView = new frank.View("repositories","RepositoriesTemplate");
-	gitblog.Views.articlesView = new frank.View("articles","ArticlesTemplate");
-	gitblog.Views.contentView = new frank.View("content","ContentTemplate");
-};
 gitblog.controllers = {};
 gitblog.controllers.ContentsController = function() {
-	this.content = new gitblog.Connection("https://api.github.com/repos/dstrekelj/gitblog-content");
+	this.content = new gitblog.Connection("https://api.github.com/repos/dstrekelj/dstrekelj.github.io");
+	this.articleView = new gitblog.views.ArticleView();
 };
 $hxClasses["gitblog.controllers.ContentsController"] = gitblog.controllers.ContentsController;
 gitblog.controllers.ContentsController.__name__ = ["gitblog","controllers","ContentsController"];
 gitblog.controllers.ContentsController.__interfaces__ = [frank.Controller];
 gitblog.controllers.ContentsController.prototype = {
 	content: null
-	,onEnter: function(hash) {
+	,articleView: null
+	,enter: function(hash) {
+		var _g = this;
 		this.content.parameters(hash).onSuccess(function(response) {
-			var data = JSON.parse(response);
-			var timestamp = data.name.substr(0,16);
-			var date = HxOverrides.substr(timestamp,0,10);
-			var time = HxOverrides.substr(timestamp,11,null).split("-").join(":");
-			gitblog.Views.contentView.update({ timestamp : [date,time].join(" @ "), body : Markdown.markdownToHtml(window.atob(data.content))});
+			var articleData = JSON.parse(response);
+			var articleModel = new gitblog.models.ArticleModel({ body : articleData.content, timestamp : articleData.name});
+			_g.articleView.update(articleModel);
 		}).onFailure(function(response1) {
-			haxe.Log.trace("FAILURE: " + response1,{ fileName : "ContentsController.hx", lineNumber : 26, className : "gitblog.controllers.ContentsController", methodName : "onEnter"});
+			haxe.Log.trace("FAILURE: " + response1,{ fileName : "ContentsController.hx", lineNumber : 34, className : "gitblog.controllers.ContentsController", methodName : "enter"});
 		}).get();
-	}
-	,onExit: function(hash) {
 	}
 	,__class__: gitblog.controllers.ContentsController
 };
 gitblog.controllers.HomeController = function() {
-	gitblog.GitBlog.api.user.onSuccess(function(Data) {
-		var user = JSON.parse(Data);
-		var userModel = new gitblog.models.UserModel({ name : user.name, email : user.email, login : user.login, location : user.location, url : user.url});
-		gitblog.Views.userView.update({ user : userModel});
+	var userApi = new gitblog.Connection("https://api.github.com/users/dstrekelj");
+	var userView = new gitblog.views.UserView();
+	userApi.onSuccess(function(Data) {
+		var userData = JSON.parse(Data);
+		var userModel = new gitblog.models.UserModel({ avatar : userData.avatar_url, name : userData.name, email : userData.email, login : userData.login, location : userData.location, repos : userData.public_repos, url : userData.url});
+		userView.update({ user : userModel});
 	}).onFailure(function(Message) {
-		haxe.Log.trace(Message,{ fileName : "HomeController.hx", lineNumber : 19, className : "gitblog.controllers.HomeController", methodName : "new"});
+		haxe.Log.trace(Message,{ fileName : "HomeController.hx", lineNumber : 35, className : "gitblog.controllers.HomeController", methodName : "new"});
 	}).onChange(function(Status) {
-		haxe.Log.trace(Status,{ fileName : "HomeController.hx", lineNumber : 20, className : "gitblog.controllers.HomeController", methodName : "new"});
+		haxe.Log.trace(Status,{ fileName : "HomeController.hx", lineNumber : 36, className : "gitblog.controllers.HomeController", methodName : "new"});
 	}).get();
-	gitblog.GitBlog.api.repos.onSuccess(function(Data1) {
-		var repos = JSON.parse(Data1);
-		gitblog.Views.repositoriesView.update({ repositories : repos});
+	var articlesApi = new gitblog.Connection("https://api.github.com/repos/dstrekelj/dstrekelj.github.io/contents/content");
+	var articlesView = new gitblog.views.ArticlesView();
+	articlesApi.onSuccess(function(Data1) {
+		var articlesData = JSON.parse(Data1);
+		var articlesModels = new Array();
+		var _g = 0;
+		while(_g < articlesData.length) {
+			var article = articlesData[_g];
+			++_g;
+			articlesModels.push(new gitblog.models.ArticlesModel({ timestamp : article.name, title : article.name, path : article.path}));
+		}
+		articlesView.update(articlesModels);
 	}).onFailure(function(Message1) {
-		haxe.Log.trace(Message1,{ fileName : "HomeController.hx", lineNumber : 29, className : "gitblog.controllers.HomeController", methodName : "new"});
+		haxe.Log.trace(Message1,{ fileName : "HomeController.hx", lineNumber : 58, className : "gitblog.controllers.HomeController", methodName : "new"});
 	}).onChange(function(Status1) {
-		haxe.Log.trace(Status1,{ fileName : "HomeController.hx", lineNumber : 30, className : "gitblog.controllers.HomeController", methodName : "new"});
-	}).get();
-	gitblog.GitBlog.api.contents.onSuccess(function(Data2) {
-		var contents = JSON.parse(Data2);
-		gitblog.Views.articlesView.update({ articles : contents});
-	}).onFailure(function(Message2) {
-		haxe.Log.trace(Message2,{ fileName : "HomeController.hx", lineNumber : 38, className : "gitblog.controllers.HomeController", methodName : "new"});
-	}).onChange(function(Status2) {
-		haxe.Log.trace(Status2,{ fileName : "HomeController.hx", lineNumber : 39, className : "gitblog.controllers.HomeController", methodName : "new"});
+		haxe.Log.trace(Status1,{ fileName : "HomeController.hx", lineNumber : 59, className : "gitblog.controllers.HomeController", methodName : "new"});
 	}).get();
 };
 $hxClasses["gitblog.controllers.HomeController"] = gitblog.controllers.HomeController;
 gitblog.controllers.HomeController.__name__ = ["gitblog","controllers","HomeController"];
 gitblog.controllers.HomeController.__interfaces__ = [frank.Controller];
 gitblog.controllers.HomeController.prototype = {
-	onEnter: function(hash) {
-		haxe.Log.trace(hash,{ fileName : "HomeController.hx", lineNumber : 43, className : "gitblog.controllers.HomeController", methodName : "onEnter"});
-	}
-	,onExit: function(hash) {
+	enter: function(hash) {
 	}
 	,__class__: gitblog.controllers.HomeController
 };
 gitblog.models = {};
+gitblog.models.ArticleModel = function(params) {
+	this.body = params.body;
+	this.timestamp = params.timestamp;
+};
+$hxClasses["gitblog.models.ArticleModel"] = gitblog.models.ArticleModel;
+gitblog.models.ArticleModel.__name__ = ["gitblog","models","ArticleModel"];
+gitblog.models.ArticleModel.prototype = {
+	body: null
+	,timestamp: null
+	,__class__: gitblog.models.ArticleModel
+};
+gitblog.models.ArticlesModel = function(params) {
+	this.timestamp = params.timestamp;
+	this.title = params.title;
+	this.path = params.path;
+};
+$hxClasses["gitblog.models.ArticlesModel"] = gitblog.models.ArticlesModel;
+gitblog.models.ArticlesModel.__name__ = ["gitblog","models","ArticlesModel"];
+gitblog.models.ArticlesModel.prototype = {
+	timestamp: null
+	,title: null
+	,path: null
+	,__class__: gitblog.models.ArticlesModel
+};
 gitblog.models.UserModel = function(params) {
+	this.avatar = params.avatar;
 	this.email = params.email;
 	this.location = params.location;
 	this.login = params.login;
 	this.name = params.name;
+	this.repos = params.repos;
 	this.url = params.url;
 };
 $hxClasses["gitblog.models.UserModel"] = gitblog.models.UserModel;
 gitblog.models.UserModel.__name__ = ["gitblog","models","UserModel"];
 gitblog.models.UserModel.prototype = {
-	email: null
+	avatar: null
+	,email: null
 	,location: null
 	,login: null
 	,name: null
+	,repos: null
 	,url: null
 	,__class__: gitblog.models.UserModel
 };
+gitblog.views = {};
+gitblog.views.ArticleView = function() {
+	frank.View.call(this,"article","ArticleTemplate");
+};
+$hxClasses["gitblog.views.ArticleView"] = gitblog.views.ArticleView;
+gitblog.views.ArticleView.__name__ = ["gitblog","views","ArticleView"];
+gitblog.views.ArticleView.__super__ = frank.View;
+gitblog.views.ArticleView.prototype = $extend(frank.View.prototype,{
+	update: function(article) {
+		var date = HxOverrides.substr(article.timestamp,0,10);
+		var time = HxOverrides.substr(article.timestamp,11,5).split("-").join(":");
+		article.timestamp = date + " @ " + time;
+		article.body = Markdown.markdownToHtml(window.atob(article.body));
+		frank.View.prototype.update.call(this,{ article : article});
+	}
+	,__class__: gitblog.views.ArticleView
+});
+gitblog.views.ArticlesView = function() {
+	frank.View.call(this,"articles","ArticlesTemplate");
+};
+$hxClasses["gitblog.views.ArticlesView"] = gitblog.views.ArticlesView;
+gitblog.views.ArticlesView.__name__ = ["gitblog","views","ArticlesView"];
+gitblog.views.ArticlesView.__super__ = frank.View;
+gitblog.views.ArticlesView.prototype = $extend(frank.View.prototype,{
+	update: function(articles) {
+		var _g = 0;
+		while(_g < articles.length) {
+			var article = articles[_g];
+			++_g;
+			var date = HxOverrides.substr(article.timestamp,0,10);
+			var time = HxOverrides.substr(article.timestamp,11,5).split("-").join(":");
+			article.timestamp = date + " @ " + time;
+			article.title = article.title.substring(17,article.title.length - 3).split("-").join(" ");
+		}
+		frank.View.prototype.update.call(this,{ articles : articles});
+	}
+	,__class__: gitblog.views.ArticlesView
+});
+gitblog.views.UserView = function() {
+	frank.View.call(this,"user","UserTemplate");
+};
+$hxClasses["gitblog.views.UserView"] = gitblog.views.UserView;
+gitblog.views.UserView.__name__ = ["gitblog","views","UserView"];
+gitblog.views.UserView.__super__ = frank.View;
+gitblog.views.UserView.prototype = $extend(frank.View.prototype,{
+	__class__: gitblog.views.UserView
+});
 haxe.Log = function() { };
 $hxClasses["haxe.Log"] = haxe.Log;
 haxe.Log.__name__ = ["haxe","Log"];
@@ -1372,273 +1408,6 @@ haxe.Resource.getBytes = function(name) {
 		}
 	}
 	return null;
-};
-haxe.Serializer = function() {
-	this.buf = new StringBuf();
-	this.cache = new Array();
-	this.useCache = haxe.Serializer.USE_CACHE;
-	this.useEnumIndex = haxe.Serializer.USE_ENUM_INDEX;
-	this.shash = new haxe.ds.StringMap();
-	this.scount = 0;
-};
-$hxClasses["haxe.Serializer"] = haxe.Serializer;
-haxe.Serializer.__name__ = ["haxe","Serializer"];
-haxe.Serializer.run = function(v) {
-	var s = new haxe.Serializer();
-	s.serialize(v);
-	return s.toString();
-};
-haxe.Serializer.prototype = {
-	buf: null
-	,cache: null
-	,shash: null
-	,scount: null
-	,useCache: null
-	,useEnumIndex: null
-	,toString: function() {
-		return this.buf.b;
-	}
-	,serializeString: function(s) {
-		var x = this.shash.get(s);
-		if(x != null) {
-			this.buf.b += "R";
-			if(x == null) this.buf.b += "null"; else this.buf.b += "" + x;
-			return;
-		}
-		this.shash.set(s,this.scount++);
-		this.buf.b += "y";
-		s = encodeURIComponent(s);
-		if(s.length == null) this.buf.b += "null"; else this.buf.b += "" + s.length;
-		this.buf.b += ":";
-		if(s == null) this.buf.b += "null"; else this.buf.b += "" + s;
-	}
-	,serializeRef: function(v) {
-		var vt = typeof(v);
-		var _g1 = 0;
-		var _g = this.cache.length;
-		while(_g1 < _g) {
-			var i = _g1++;
-			var ci = this.cache[i];
-			if(typeof(ci) == vt && ci == v) {
-				this.buf.b += "r";
-				if(i == null) this.buf.b += "null"; else this.buf.b += "" + i;
-				return true;
-			}
-		}
-		this.cache.push(v);
-		return false;
-	}
-	,serializeFields: function(v) {
-		var _g = 0;
-		var _g1 = Reflect.fields(v);
-		while(_g < _g1.length) {
-			var f = _g1[_g];
-			++_g;
-			this.serializeString(f);
-			this.serialize(Reflect.field(v,f));
-		}
-		this.buf.b += "g";
-	}
-	,serialize: function(v) {
-		{
-			var _g = Type["typeof"](v);
-			switch(_g[1]) {
-			case 0:
-				this.buf.b += "n";
-				break;
-			case 1:
-				var v1 = v;
-				if(v1 == 0) {
-					this.buf.b += "z";
-					return;
-				}
-				this.buf.b += "i";
-				if(v1 == null) this.buf.b += "null"; else this.buf.b += "" + v1;
-				break;
-			case 2:
-				var v2 = v;
-				if(Math.isNaN(v2)) this.buf.b += "k"; else if(!Math.isFinite(v2)) if(v2 < 0) this.buf.b += "m"; else this.buf.b += "p"; else {
-					this.buf.b += "d";
-					if(v2 == null) this.buf.b += "null"; else this.buf.b += "" + v2;
-				}
-				break;
-			case 3:
-				if(v) this.buf.b += "t"; else this.buf.b += "f";
-				break;
-			case 6:
-				var c = _g[2];
-				if(c == String) {
-					this.serializeString(v);
-					return;
-				}
-				if(this.useCache && this.serializeRef(v)) return;
-				switch(c) {
-				case Array:
-					var ucount = 0;
-					this.buf.b += "a";
-					var l = v.length;
-					var _g1 = 0;
-					while(_g1 < l) {
-						var i = _g1++;
-						if(v[i] == null) ucount++; else {
-							if(ucount > 0) {
-								if(ucount == 1) this.buf.b += "n"; else {
-									this.buf.b += "u";
-									if(ucount == null) this.buf.b += "null"; else this.buf.b += "" + ucount;
-								}
-								ucount = 0;
-							}
-							this.serialize(v[i]);
-						}
-					}
-					if(ucount > 0) {
-						if(ucount == 1) this.buf.b += "n"; else {
-							this.buf.b += "u";
-							if(ucount == null) this.buf.b += "null"; else this.buf.b += "" + ucount;
-						}
-					}
-					this.buf.b += "h";
-					break;
-				case List:
-					this.buf.b += "l";
-					var v3 = v;
-					var $it0 = v3.iterator();
-					while( $it0.hasNext() ) {
-						var i1 = $it0.next();
-						this.serialize(i1);
-					}
-					this.buf.b += "h";
-					break;
-				case Date:
-					var d = v;
-					this.buf.b += "v";
-					this.buf.add(HxOverrides.dateStr(d));
-					break;
-				case haxe.ds.StringMap:
-					this.buf.b += "b";
-					var v4 = v;
-					var $it1 = v4.keys();
-					while( $it1.hasNext() ) {
-						var k = $it1.next();
-						this.serializeString(k);
-						this.serialize(v4.get(k));
-					}
-					this.buf.b += "h";
-					break;
-				case haxe.ds.IntMap:
-					this.buf.b += "q";
-					var v5 = v;
-					var $it2 = v5.keys();
-					while( $it2.hasNext() ) {
-						var k1 = $it2.next();
-						this.buf.b += ":";
-						if(k1 == null) this.buf.b += "null"; else this.buf.b += "" + k1;
-						this.serialize(v5.get(k1));
-					}
-					this.buf.b += "h";
-					break;
-				case haxe.ds.ObjectMap:
-					this.buf.b += "M";
-					var v6 = v;
-					var $it3 = v6.keys();
-					while( $it3.hasNext() ) {
-						var k2 = $it3.next();
-						var id = Reflect.field(k2,"__id__");
-						Reflect.deleteField(k2,"__id__");
-						this.serialize(k2);
-						k2.__id__ = id;
-						this.serialize(v6.h[k2.__id__]);
-					}
-					this.buf.b += "h";
-					break;
-				case haxe.io.Bytes:
-					var v7 = v;
-					var i2 = 0;
-					var max = v7.length - 2;
-					var charsBuf = new StringBuf();
-					var b64 = haxe.Serializer.BASE64;
-					while(i2 < max) {
-						var b1 = v7.get(i2++);
-						var b2 = v7.get(i2++);
-						var b3 = v7.get(i2++);
-						charsBuf.add(b64.charAt(b1 >> 2));
-						charsBuf.add(b64.charAt((b1 << 4 | b2 >> 4) & 63));
-						charsBuf.add(b64.charAt((b2 << 2 | b3 >> 6) & 63));
-						charsBuf.add(b64.charAt(b3 & 63));
-					}
-					if(i2 == max) {
-						var b11 = v7.get(i2++);
-						var b21 = v7.get(i2++);
-						charsBuf.add(b64.charAt(b11 >> 2));
-						charsBuf.add(b64.charAt((b11 << 4 | b21 >> 4) & 63));
-						charsBuf.add(b64.charAt(b21 << 2 & 63));
-					} else if(i2 == max + 1) {
-						var b12 = v7.get(i2++);
-						charsBuf.add(b64.charAt(b12 >> 2));
-						charsBuf.add(b64.charAt(b12 << 4 & 63));
-					}
-					var chars = charsBuf.b;
-					this.buf.b += "s";
-					if(chars.length == null) this.buf.b += "null"; else this.buf.b += "" + chars.length;
-					this.buf.b += ":";
-					if(chars == null) this.buf.b += "null"; else this.buf.b += "" + chars;
-					break;
-				default:
-					if(this.useCache) this.cache.pop();
-					if(v.hxSerialize != null) {
-						this.buf.b += "C";
-						this.serializeString(Type.getClassName(c));
-						if(this.useCache) this.cache.push(v);
-						v.hxSerialize(this);
-						this.buf.b += "g";
-					} else {
-						this.buf.b += "c";
-						this.serializeString(Type.getClassName(c));
-						if(this.useCache) this.cache.push(v);
-						this.serializeFields(v);
-					}
-				}
-				break;
-			case 4:
-				if(this.useCache && this.serializeRef(v)) return;
-				this.buf.b += "o";
-				this.serializeFields(v);
-				break;
-			case 7:
-				var e = _g[2];
-				if(this.useCache) {
-					if(this.serializeRef(v)) return;
-					this.cache.pop();
-				}
-				if(this.useEnumIndex) this.buf.b += "j"; else this.buf.b += "w";
-				this.serializeString(Type.getEnumName(e));
-				if(this.useEnumIndex) {
-					this.buf.b += ":";
-					this.buf.b += Std.string(v[1]);
-				} else this.serializeString(v[0]);
-				this.buf.b += ":";
-				var l1 = v.length;
-				this.buf.b += Std.string(l1 - 2);
-				var _g11 = 2;
-				while(_g11 < l1) {
-					var i3 = _g11++;
-					this.serialize(v[i3]);
-				}
-				if(this.useCache) this.cache.push(v);
-				break;
-			case 5:
-				throw "Cannot serialize function";
-				break;
-			default:
-				throw "Cannot serialize " + Std.string(v);
-			}
-		}
-	}
-	,serializeException: function(e) {
-		this.buf.b += "x";
-		this.serialize(e);
-	}
-	,__class__: haxe.Serializer
 };
 haxe._Template = {};
 haxe._Template.TemplateExpr = $hxClasses["haxe._Template.TemplateExpr"] = { __ename__ : ["haxe","_Template","TemplateExpr"], __constructs__ : ["OpVar","OpExpr","OpIf","OpStr","OpBlock","OpForeach","OpMacro"] };
@@ -2018,285 +1787,6 @@ haxe.Template.prototype = {
 		}
 	}
 	,__class__: haxe.Template
-};
-haxe.Unserializer = function(buf) {
-	this.buf = buf;
-	this.length = buf.length;
-	this.pos = 0;
-	this.scache = new Array();
-	this.cache = new Array();
-	var r = haxe.Unserializer.DEFAULT_RESOLVER;
-	if(r == null) {
-		r = Type;
-		haxe.Unserializer.DEFAULT_RESOLVER = r;
-	}
-	this.setResolver(r);
-};
-$hxClasses["haxe.Unserializer"] = haxe.Unserializer;
-haxe.Unserializer.__name__ = ["haxe","Unserializer"];
-haxe.Unserializer.initCodes = function() {
-	var codes = new Array();
-	var _g1 = 0;
-	var _g = haxe.Unserializer.BASE64.length;
-	while(_g1 < _g) {
-		var i = _g1++;
-		codes[haxe.Unserializer.BASE64.charCodeAt(i)] = i;
-	}
-	return codes;
-};
-haxe.Unserializer.run = function(v) {
-	return new haxe.Unserializer(v).unserialize();
-};
-haxe.Unserializer.prototype = {
-	buf: null
-	,pos: null
-	,length: null
-	,cache: null
-	,scache: null
-	,resolver: null
-	,setResolver: function(r) {
-		if(r == null) this.resolver = { resolveClass : function(_) {
-			return null;
-		}, resolveEnum : function(_1) {
-			return null;
-		}}; else this.resolver = r;
-	}
-	,getResolver: function() {
-		return this.resolver;
-	}
-	,get: function(p) {
-		return this.buf.charCodeAt(p);
-	}
-	,readDigits: function() {
-		var k = 0;
-		var s = false;
-		var fpos = this.pos;
-		while(true) {
-			var c = this.buf.charCodeAt(this.pos);
-			if(c != c) break;
-			if(c == 45) {
-				if(this.pos != fpos) break;
-				s = true;
-				this.pos++;
-				continue;
-			}
-			if(c < 48 || c > 57) break;
-			k = k * 10 + (c - 48);
-			this.pos++;
-		}
-		if(s) k *= -1;
-		return k;
-	}
-	,unserializeObject: function(o) {
-		while(true) {
-			if(this.pos >= this.length) throw "Invalid object";
-			if(this.buf.charCodeAt(this.pos) == 103) break;
-			var k = this.unserialize();
-			if(!(typeof(k) == "string")) throw "Invalid object key";
-			var v = this.unserialize();
-			o[k] = v;
-		}
-		this.pos++;
-	}
-	,unserializeEnum: function(edecl,tag) {
-		if(this.get(this.pos++) != 58) throw "Invalid enum format";
-		var nargs = this.readDigits();
-		if(nargs == 0) return Type.createEnum(edecl,tag);
-		var args = new Array();
-		while(nargs-- > 0) args.push(this.unserialize());
-		return Type.createEnum(edecl,tag,args);
-	}
-	,unserialize: function() {
-		var _g = this.get(this.pos++);
-		switch(_g) {
-		case 110:
-			return null;
-		case 116:
-			return true;
-		case 102:
-			return false;
-		case 122:
-			return 0;
-		case 105:
-			return this.readDigits();
-		case 100:
-			var p1 = this.pos;
-			while(true) {
-				var c = this.buf.charCodeAt(this.pos);
-				if(c >= 43 && c < 58 || c == 101 || c == 69) this.pos++; else break;
-			}
-			return Std.parseFloat(HxOverrides.substr(this.buf,p1,this.pos - p1));
-		case 121:
-			var len = this.readDigits();
-			if(this.get(this.pos++) != 58 || this.length - this.pos < len) throw "Invalid string length";
-			var s = HxOverrides.substr(this.buf,this.pos,len);
-			this.pos += len;
-			s = decodeURIComponent(s.split("+").join(" "));
-			this.scache.push(s);
-			return s;
-		case 107:
-			return Math.NaN;
-		case 109:
-			return Math.NEGATIVE_INFINITY;
-		case 112:
-			return Math.POSITIVE_INFINITY;
-		case 97:
-			var buf = this.buf;
-			var a = new Array();
-			this.cache.push(a);
-			while(true) {
-				var c1 = this.buf.charCodeAt(this.pos);
-				if(c1 == 104) {
-					this.pos++;
-					break;
-				}
-				if(c1 == 117) {
-					this.pos++;
-					var n = this.readDigits();
-					a[a.length + n - 1] = null;
-				} else a.push(this.unserialize());
-			}
-			return a;
-		case 111:
-			var o = { };
-			this.cache.push(o);
-			this.unserializeObject(o);
-			return o;
-		case 114:
-			var n1 = this.readDigits();
-			if(n1 < 0 || n1 >= this.cache.length) throw "Invalid reference";
-			return this.cache[n1];
-		case 82:
-			var n2 = this.readDigits();
-			if(n2 < 0 || n2 >= this.scache.length) throw "Invalid string reference";
-			return this.scache[n2];
-		case 120:
-			throw this.unserialize();
-			break;
-		case 99:
-			var name = this.unserialize();
-			var cl = this.resolver.resolveClass(name);
-			if(cl == null) throw "Class not found " + name;
-			var o1 = Type.createEmptyInstance(cl);
-			this.cache.push(o1);
-			this.unserializeObject(o1);
-			return o1;
-		case 119:
-			var name1 = this.unserialize();
-			var edecl = this.resolver.resolveEnum(name1);
-			if(edecl == null) throw "Enum not found " + name1;
-			var e = this.unserializeEnum(edecl,this.unserialize());
-			this.cache.push(e);
-			return e;
-		case 106:
-			var name2 = this.unserialize();
-			var edecl1 = this.resolver.resolveEnum(name2);
-			if(edecl1 == null) throw "Enum not found " + name2;
-			this.pos++;
-			var index = this.readDigits();
-			var tag = Type.getEnumConstructs(edecl1)[index];
-			if(tag == null) throw "Unknown enum index " + name2 + "@" + index;
-			var e1 = this.unserializeEnum(edecl1,tag);
-			this.cache.push(e1);
-			return e1;
-		case 108:
-			var l = new List();
-			this.cache.push(l);
-			var buf1 = this.buf;
-			while(this.buf.charCodeAt(this.pos) != 104) l.add(this.unserialize());
-			this.pos++;
-			return l;
-		case 98:
-			var h = new haxe.ds.StringMap();
-			this.cache.push(h);
-			var buf2 = this.buf;
-			while(this.buf.charCodeAt(this.pos) != 104) {
-				var s1 = this.unserialize();
-				h.set(s1,this.unserialize());
-			}
-			this.pos++;
-			return h;
-		case 113:
-			var h1 = new haxe.ds.IntMap();
-			this.cache.push(h1);
-			var buf3 = this.buf;
-			var c2 = this.get(this.pos++);
-			while(c2 == 58) {
-				var i = this.readDigits();
-				h1.set(i,this.unserialize());
-				c2 = this.get(this.pos++);
-			}
-			if(c2 != 104) throw "Invalid IntMap format";
-			return h1;
-		case 77:
-			var h2 = new haxe.ds.ObjectMap();
-			this.cache.push(h2);
-			var buf4 = this.buf;
-			while(this.buf.charCodeAt(this.pos) != 104) {
-				var s2 = this.unserialize();
-				h2.set(s2,this.unserialize());
-			}
-			this.pos++;
-			return h2;
-		case 118:
-			var d;
-			var s3 = HxOverrides.substr(this.buf,this.pos,19);
-			d = HxOverrides.strDate(s3);
-			this.cache.push(d);
-			this.pos += 19;
-			return d;
-		case 115:
-			var len1 = this.readDigits();
-			var buf5 = this.buf;
-			if(this.get(this.pos++) != 58 || this.length - this.pos < len1) throw "Invalid bytes length";
-			var codes = haxe.Unserializer.CODES;
-			if(codes == null) {
-				codes = haxe.Unserializer.initCodes();
-				haxe.Unserializer.CODES = codes;
-			}
-			var i1 = this.pos;
-			var rest = len1 & 3;
-			var size;
-			size = (len1 >> 2) * 3 + (rest >= 2?rest - 1:0);
-			var max = i1 + (len1 - rest);
-			var bytes = haxe.io.Bytes.alloc(size);
-			var bpos = 0;
-			while(i1 < max) {
-				var c11 = codes[StringTools.fastCodeAt(buf5,i1++)];
-				var c21 = codes[StringTools.fastCodeAt(buf5,i1++)];
-				bytes.set(bpos++,c11 << 2 | c21 >> 4);
-				var c3 = codes[StringTools.fastCodeAt(buf5,i1++)];
-				bytes.set(bpos++,c21 << 4 | c3 >> 2);
-				var c4 = codes[StringTools.fastCodeAt(buf5,i1++)];
-				bytes.set(bpos++,c3 << 6 | c4);
-			}
-			if(rest >= 2) {
-				var c12 = codes[StringTools.fastCodeAt(buf5,i1++)];
-				var c22 = codes[StringTools.fastCodeAt(buf5,i1++)];
-				bytes.set(bpos++,c12 << 2 | c22 >> 4);
-				if(rest == 3) {
-					var c31 = codes[StringTools.fastCodeAt(buf5,i1++)];
-					bytes.set(bpos++,c22 << 4 | c31 >> 2);
-				}
-			}
-			this.pos += len1;
-			this.cache.push(bytes);
-			return bytes;
-		case 67:
-			var name3 = this.unserialize();
-			var cl1 = this.resolver.resolveClass(name3);
-			if(cl1 == null) throw "Class not found " + name3;
-			var o2 = Type.createEmptyInstance(cl1);
-			this.cache.push(o2);
-			o2.hxUnserialize(this);
-			if(this.get(this.pos++) != 103) throw "Invalid custom data";
-			return o2;
-		default:
-		}
-		this.pos--;
-		throw "Invalid char " + this.buf.charAt(this.pos) + " at position " + this.pos;
-	}
-	,__class__: haxe.Unserializer
 };
 haxe.io = {};
 haxe.io.Bytes = function(length,b) {
@@ -3510,106 +3000,6 @@ haxe.io.Error.OutsideBounds.toString = $estr;
 haxe.io.Error.OutsideBounds.__enum__ = haxe.io.Error;
 haxe.io.Error.Custom = function(e) { var $x = ["Custom",3,e]; $x.__enum__ = haxe.io.Error; $x.toString = $estr; return $x; };
 haxe.io.Error.__empty_constructs__ = [haxe.io.Error.Blocked,haxe.io.Error.Overflow,haxe.io.Error.OutsideBounds];
-haxe.remoting = {};
-haxe.remoting.Connection = function() { };
-$hxClasses["haxe.remoting.Connection"] = haxe.remoting.Connection;
-haxe.remoting.Connection.__name__ = ["haxe","remoting","Connection"];
-haxe.remoting.Connection.prototype = {
-	resolve: null
-	,call: null
-	,__class__: haxe.remoting.Connection
-};
-haxe.remoting.Context = function() {
-	this.objects = new haxe.ds.StringMap();
-};
-$hxClasses["haxe.remoting.Context"] = haxe.remoting.Context;
-haxe.remoting.Context.__name__ = ["haxe","remoting","Context"];
-haxe.remoting.Context.share = function(name,obj) {
-	var ctx = new haxe.remoting.Context();
-	ctx.addObject(name,obj);
-	return ctx;
-};
-haxe.remoting.Context.prototype = {
-	objects: null
-	,addObject: function(name,obj,recursive) {
-		this.objects.set(name,{ obj : obj, rec : recursive});
-	}
-	,call: function(path,params) {
-		if(path.length < 2) throw "Invalid path '" + path.join(".") + "'";
-		var inf = this.objects.get(path[0]);
-		if(inf == null) throw "No such object " + path[0];
-		var o = inf.obj;
-		var m = Reflect.field(o,path[1]);
-		if(path.length > 2) {
-			if(!inf.rec) throw "Can't access " + path.join(".");
-			var _g1 = 2;
-			var _g = path.length;
-			while(_g1 < _g) {
-				var i = _g1++;
-				o = m;
-				m = Reflect.field(o,path[i]);
-			}
-		}
-		if(!Reflect.isFunction(m)) throw "No such method " + path.join(".");
-		return m.apply(o,params);
-	}
-	,__class__: haxe.remoting.Context
-};
-haxe.remoting.HttpConnection = function(url,path) {
-	this.__url = url;
-	this.__path = path;
-};
-$hxClasses["haxe.remoting.HttpConnection"] = haxe.remoting.HttpConnection;
-haxe.remoting.HttpConnection.__name__ = ["haxe","remoting","HttpConnection"];
-haxe.remoting.HttpConnection.__interfaces__ = [haxe.remoting.Connection];
-haxe.remoting.HttpConnection.urlConnect = function(url) {
-	return new haxe.remoting.HttpConnection(url,[]);
-};
-haxe.remoting.HttpConnection.processRequest = function(requestData,ctx) {
-	try {
-		var u = new haxe.Unserializer(requestData);
-		var path = u.unserialize();
-		var args = u.unserialize();
-		var data = ctx.call(path,args);
-		var s = new haxe.Serializer();
-		s.serialize(data);
-		return "hxr" + s.toString();
-	} catch( e ) {
-		var s1 = new haxe.Serializer();
-		s1.serializeException(e);
-		return "hxr" + s1.toString();
-	}
-};
-haxe.remoting.HttpConnection.prototype = {
-	__url: null
-	,__path: null
-	,resolve: function(name) {
-		var c = new haxe.remoting.HttpConnection(this.__url,this.__path.slice());
-		c.__path.push(name);
-		return c;
-	}
-	,call: function(params) {
-		var data = null;
-		var h = new haxe.Http(this.__url);
-		h.async = false;
-		var s = new haxe.Serializer();
-		s.serialize(this.__path);
-		s.serialize(params);
-		h.setHeader("X-Haxe-Remoting","1");
-		h.setParameter("__x",s.toString());
-		h.onData = function(d) {
-			data = d;
-		};
-		h.onError = function(e) {
-			throw e;
-		};
-		h.request(true);
-		if(HxOverrides.substr(data,0,3) != "hxr") throw "Invalid response : '" + data + "'";
-		data = HxOverrides.substr(data,3,null);
-		return new haxe.Unserializer(data).unserialize();
-	}
-	,__class__: haxe.remoting.HttpConnection
-};
 var js = {};
 js.Boot = function() { };
 $hxClasses["js.Boot"] = js.Boot;
@@ -4848,24 +4238,17 @@ if(Array.prototype.filter == null) Array.prototype.filter = function(f1) {
 	}
 	return a1;
 };
-haxe.Resource.content = [{ name : "ArticlesTemplate", data : "PHVsPg0KOjpmb3JlYWNoIGFydGljbGVzOjoNCiAgPGxpPjxhIGhyZWY9IiMvY29udGVudHMvOjpfX2N1cnJlbnRfXy5wYXRoOjoiPjo6X19jdXJyZW50X18ubmFtZTo6PC9hPjwvbGk+DQo6OmVuZDo6DQo8L3VsPg"},{ name : "ContentTemplate", data : "PGRpdj5Xcml0dGVuIG9uIDo6dGltZXN0YW1wOjo8L2Rpdj4NCjo6Ym9keTo6"},{ name : "UserTemplate", data : "PHVsPg0KPGxpPjo6dXNlci5uYW1lOjo8L2xpPg0KPGxpPjo6dXNlci5sb2dpbjo6PC9saT4NCjxsaT46OnVzZXIubG9jYXRpb246OjwvbGk+DQo8bGk+Ojp1c2VyLmVtYWlsOjo8L2xpPg0KPGxpPjxhIGhyZWY9Ijo6dXNlci51cmw6OiI+VmlldyBvbiBHaXRIdWI8L2E+PC9saT4NCjwvdWw+"},{ name : "RepositoriesTemplate", data : "PHVsPg0KOjpmb3JlYWNoIHJlcG9zaXRvcmllczo6DQogIDxsaT46Ol9fY3VycmVudF9fLm5hbWU6OjwvbGk+DQo6OmVuZDo6DQo8L3VsPg"}];
-haxe.Serializer.USE_CACHE = false;
-haxe.Serializer.USE_ENUM_INDEX = false;
-haxe.Serializer.BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789%:";
+haxe.Resource.content = [{ name : "ArticlesTemplate", data : "PHVsPg0KOjpmb3JlYWNoIGFydGljbGVzOjoNCiAgPGxpPjxhIGhyZWY9IiMvY29udGVudHMvOjpfX2N1cnJlbnRfXy5wYXRoOjoiPjo6X19jdXJyZW50X18udGl0bGU6OjwvYT48YnIvPjxzcGFuIGNsYXNzPSJ0aW1lc3RhbXAiPjo6X19jdXJyZW50X18udGltZXN0YW1wOjo8L3NwYW4+PC9saT4NCjo6ZW5kOjoNCjwvdWw+"},{ name : "UserTemplate", data : "PGltZyBzcmM9Ijo6dXNlci5hdmF0YXI6OiIvPg0KPHA+SGVsbG8hIE15IG5hbWUgaXMgPHNwYW4+Ojp1c2VyLm5hbWU6Ojwvc3Bhbj4gKDxzcGFuPjo6dXNlci5sb2dpbjo6PC9zcGFuPiksIGFuZCBJIGhhaWwgZnJvbSA8c3Bhbj46OnVzZXIubG9jYXRpb246Ojwvc3Bhbj4uIEkgaGF2ZSBjb250cmlidXRlZCB0byA8c3Bhbj46OnVzZXIucmVwb3M6Ojwvc3Bhbj4gcmVwb3NpdG9yaWVzIHNvIGZhciwgd2l0aCBtb3JlIHRvIGNvbWUhPC9wPg0KPHA+SW4gc2hvcnQsIEkgYW0gYSBnZW5lcmFsaXN0IHdobyBlbmpveXMgbWFraW5nIHRoaW5ncyB3aXRoIEhheGUuPC9wPg0KPHA+Q29udGFjdCBtZSBhdCA8c3Bhbj46OnVzZXIuZW1haWw6Ojwvc3Bhbj4sIG9yIHZpc2l0IG15IDxhIGhyZWY9Ijo6dXNlci51cmw6OiI+R2l0SHViIHBhZ2U8L2E+LjwvcD4"},{ name : "ArticleTemplate", data : "PGRpdiBjbGFzcz0idGltZXN0YW1wIj5Xcml0dGVuIG9uIDo6YXJ0aWNsZS50aW1lc3RhbXA6OjwvZGl2Pg0KOjphcnRpY2xlLmJvZHk6Og"}];
 haxe.Template.splitter = new EReg("(::[A-Za-z0-9_ ()&|!+=/><*.\"-]+::|\\$\\$([A-Za-z0-9_-]+)\\()","");
 haxe.Template.expr_splitter = new EReg("(\\(|\\)|[ \r\n\t]*\"[^\"]*\"[ \r\n\t]*|[!+=/><*.&|-]+)","");
 haxe.Template.expr_trim = new EReg("^[ ]*([^ ]+)[ ]*$","");
 haxe.Template.expr_int = new EReg("^[0-9]+$","");
 haxe.Template.expr_float = new EReg("^([+-]?)(?=\\d|,\\d)\\d*(,\\d*)?([Ee]([+-]?\\d+))?$","");
 haxe.Template.globals = { };
-haxe.Unserializer.DEFAULT_RESOLVER = Type;
-haxe.Unserializer.BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789%:";
-haxe.Unserializer.CODES = null;
 haxe.crypto.Base64.CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 haxe.crypto.Base64.BYTES = haxe.io.Bytes.ofString(haxe.crypto.Base64.CHARS);
 haxe.ds.ObjectMap.count = 0;
 haxe.io.Output.LN2 = Math.log(2);
-haxe.remoting.HttpConnection.TIMEOUT = 10.;
 markdown.BlockSyntax.RE_EMPTY = new EReg("^([ \\t]*)$","");
 markdown.BlockSyntax.RE_SETEXT = new EReg("^((=+)|(-+))$","");
 markdown.BlockSyntax.RE_HEADER = new EReg("^(#{1,6})(.*?)#*$","");

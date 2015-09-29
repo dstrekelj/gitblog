@@ -1,9 +1,8 @@
 -lib markdown
 
--resource resources/user.mtt@UserTemplate
--resource resources/repositories.mtt@RepositoriesTemplate
+-resource resources/article.mtt@ArticleTemplate
 -resource resources/articles.mtt@ArticlesTemplate
--resource resources/content.mtt@ContentTemplate
+-resource resources/user.mtt@UserTemplate
 
 -dce no
 

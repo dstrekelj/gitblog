@@ -1,46 +1,64 @@
 package gitblog.controllers;
 
-class HomeController implements frank.Controller
+import frank.Controller;
+
+import gitblog.Connection;
+import gitblog.Responses;
+import gitblog.models.ArticlesModel;
+import gitblog.models.UserModel;
+import gitblog.views.ArticlesView;
+import gitblog.views.UserView;
+
+class HomeController implements Controller
 {
   public function new()
   {
-    GitBlog.api.user
+    var userApi = new Connection('https://api.github.com/users/dstrekelj');
+    var userView = new UserView();
+    
+    userApi
       .onSuccess(function(Data : String) {
-        var user : gitblog.Responses.UserResponse = haxe.Json.parse(Data);
-        var userModel = new gitblog.models.UserModel({
-          name : user.name
-          ,email : user.email
-          ,login : user.login
-          ,location : user.location
-          ,url : user.url
+        var userData : Responses.UserResponse = haxe.Json.parse(Data);
+        
+        var userModel = new UserModel({
+          avatar : userData.avatar_url,
+          name : userData.name,
+          email : userData.email,
+          login : userData.login,
+          location : userData.location,
+          repos : userData.public_repos,
+          url : userData.url
         });
-        gitblog.Views.userView.update({ user : userModel });
+        
+        userView.update({ user : userModel });
       })
       .onFailure(function(Message : String) { trace(Message); })
       .onChange(function(Status : Int) { trace(Status); })
       .get();
 
-    GitBlog.api.repos
+    var articlesApi = new Connection('https://api.github.com/repos/dstrekelj/dstrekelj.github.io/contents/content');
+    var articlesView = new ArticlesView();
+    
+    articlesApi
       .onSuccess(function(Data : String) {
-        var repos : gitblog.Responses.ReposResponse = haxe.Json.parse(Data);
-        // dce disabled because it messes with object array
-        gitblog.Views.repositoriesView.update({ repositories : repos });
-      })
-      .onFailure(function(Message : String) { trace(Message); })
-      .onChange(function(Status : Int) { trace(Status); })
-      .get();
+        var articlesData : Responses.ContentsResponse = haxe.Json.parse(Data);
+        var articlesModels = new Array<ArticlesModel>();
+        
+        for (article in articlesData)
+        {
+          articlesModels.push(new ArticlesModel({
+            timestamp : article.name,
+            title : article.name,
+            path : article.path
+          }));
+        }
 
-    GitBlog.api.contents
-      .onSuccess(function(Data : String) {
-        var contents : gitblog.Responses.ContentsResponse = haxe.Json.parse(Data);
-        gitblog.Views.articlesView.update({ articles : contents });
+        articlesView.update(articlesModels);
       })
       .onFailure(function(Message : String) { trace(Message); })
       .onChange(function(Status : Int) { trace(Status); })
       .get();
   }
 
-  public function onEnter(hash : String) : Void { trace(hash); }
-
-  public function onExit(hash : String) : Void {}
+  public function enter(hash : String) : Void {}
 }

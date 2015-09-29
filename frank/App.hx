@@ -7,38 +7,41 @@ import frank.Controller;
  */
 class App
 {
-  var routes : Map<EReg, Controller>;
-  var context : Controller;
+  /**
+   * Stores all defined routes. Using an array makes it possible to iterate
+   * through routes in the order they were set.
+   */
+  var routes : Array<Route>;
 
   public function new()
   {
-    routes = new Map<EReg, Controller>();
-    context = null;
-
+    routes = new Array<Route>();
     js.Browser.window.addEventListener('hashchange', router);
   }
 
-  public function route(route : EReg, controller : Controller) : App
+  /**
+   * Registers a new route with the application.
+   * @param   route   Route (path-controller pair) to register
+   * @return  This object for chaining
+   */
+  public function route(route : Route) : App
   {
-    routes.set(route, controller);
-
+    routes.push(route);
     return this;
   }
 
+  /**
+   * Checks if current fragment identifier (hash) matches a route.
+   * @param   event   The event 'onhashchange' event that called this function
+   */
   private function router(event : js.html.EventListener) : Void
   {
     var hash : String = js.Browser.location.hash.substr(1);
-    var route : EReg = findRoute(hash);
-    trace(hash);
+    var route : Route = findRoute(hash);
+
     if (route != null)
     {
-      var controller : Controller = routes.get(route);
-      
-      if (context != null)
-        context.onExit(hash);
-
-      context = controller;
-      context.onEnter(hash);
+      route.controller.enter(hash);
     }
     else
     {
@@ -46,15 +49,28 @@ class App
     }
   }
 
-  private function findRoute(hash : String) : EReg
+  /**
+   * Attempts to find route among registered routes.
+   * @param   Current fragment identifier (hash)
+   * @return  Route if found, `null` if not
+   */
+  private function findRoute(hash : String) : Route
   {
-    for (route in routes.keys())
+    for (route in routes)
     {
-      if (route.match(hash))
+      if (route.path.match(hash))
       {
         return route;
       }
     }
     return null;
   }
+}
+
+/**
+ * Defines a route as a path-controller pair.
+ */
+private typedef Route = {
+  var path : EReg;
+  var controller : frank.Controller;
 }

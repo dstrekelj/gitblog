@@ -1,32 +1,38 @@
 package gitblog.controllers;
 
-class ContentsController implements frank.Controller
+import frank.Controller;
+
+import gitblog.Connection;
+import gitblog.models.ArticleModel;
+import gitblog.views.ArticleView;
+
+class ContentsController implements Controller
 {
-  var content : gitblog.Connection;
+  var content : Connection;
+  var articleView : ArticleView;
 
   public function new()
   {
-    content = new Connection('https://api.github.com/repos/dstrekelj/gitblog-content');
+    content = new Connection('https://api.github.com/repos/dstrekelj/dstrekelj.github.io');
+    articleView = new ArticleView();
   }
 
-  public function onEnter(hash : String) : Void
+  public function enter(hash : String) : Void
   {
     content.parameters(hash)
       .onSuccess(function(response : String) {
-        var data = haxe.Json.parse(response);
-        var timestamp : String = data.name.substr(0, 16);
-        var date : String = timestamp.substr(0, 10);
-        var time : String = timestamp.substr(11).split('-').join(':');
-        gitblog.Views.contentView.update({
-          timestamp : [date, time].join(' @ ')
-          ,body : Markdown.markdownToHtml(js.Browser.window.atob(data.content))
+        var articleData = haxe.Json.parse(response);
+
+        var articleModel = new ArticleModel({
+          body : articleData.content,
+          timestamp : articleData.name
         });
+
+        articleView.update(articleModel);
       })
       .onFailure(function(response : String) {
         trace('FAILURE: ${response}');
       })
       .get();
   }
-
-  public function onExit(hash : String) : Void {}
 }
