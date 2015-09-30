@@ -106,6 +106,7 @@ div#article pre {
   padding: 1em;
   border-left: 1em solid #8da9cd;
   overflow-x: auto;
+  margin: 2em 0;
 }
 
 div#article blockquote {
