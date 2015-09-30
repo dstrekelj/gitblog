@@ -10,7 +10,7 @@ class UserModel
   public var repos : Int;
   public var url : String;
 
-  public function new(params : UserModelParams):Void
+  public function new(params : UserModelParams)
   {
     avatar = params.avatar;
     email = params.email;

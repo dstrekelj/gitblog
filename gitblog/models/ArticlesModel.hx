@@ -6,7 +6,7 @@ class ArticlesModel
   public var title : String;
   public var path : String;
 
-  public function new(params : ArticlesModelParams):Void
+  public function new(params : ArticlesModelParams)
   {
     timestamp = params.timestamp;
     title = params.title;
