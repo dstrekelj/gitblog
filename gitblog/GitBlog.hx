@@ -1,5 +1,10 @@
 package gitblog;
 
+import frank.App;
+
+/**
+ * Blog web-app entry point.
+ */
 class GitBlog
 {
   public static function main()
@@ -9,7 +14,7 @@ class GitBlog
   
   public function new()
   {
-    new frank.App()
+    new App()
         .route({
           path : ~/^\/$/,
           controller : new gitblog.controllers.HomeController()

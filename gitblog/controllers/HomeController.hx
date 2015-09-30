@@ -9,6 +9,9 @@ import gitblog.models.UserModel;
 import gitblog.views.ArticlesView;
 import gitblog.views.UserView;
 
+/**
+ * Populates homepage / index view.
+ */
 class HomeController implements Controller
 {
   public function new()
@@ -30,7 +33,7 @@ class HomeController implements Controller
           url : userData.url
         });
         
-        userView.update({ user : userModel });
+        userView.update(userModel);
       })
       .onFailure(function(Message : String) { trace(Message); })
       .onChange(function(Status : Int) { trace(Status); })

@@ -1,8 +1,7 @@
 package gitblog;
 
 /**
- * `Http` wrapper for ease of use.
- * @author Domagoj Štrekelj
+ * `Http` wrapper for easier use.
  */
 class Connection extends haxe.Http
 {

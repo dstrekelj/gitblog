@@ -3,9 +3,13 @@ package gitblog.controllers;
 import frank.Controller;
 
 import gitblog.Connection;
+import gitblog.Responses;
 import gitblog.models.ArticleModel;
 import gitblog.views.ArticleView;
 
+/**
+ * Handles request to view a single article.
+ */
 class ContentsController implements Controller
 {
   var content : Connection;
@@ -21,7 +25,7 @@ class ContentsController implements Controller
   {
     content.parameters(hash)
       .onSuccess(function(response : String) {
-        var articleData = haxe.Json.parse(response);
+        var articleData : Responses.FileResponse = haxe.Json.parse(response);
 
         var articleModel = new ArticleModel({
           body : articleData.content,

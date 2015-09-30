@@ -2,13 +2,13 @@ package gitblog.models;
 
 class UserModel
 {
-  var avatar : String;
-  var email : String;
-  var location : String;
-  var login : String;
-  var name : String;
-  var repos : Int;
-  var url : String;
+  public var avatar : String;
+  public var email : String;
+  public var location : String;
+  public var login : String;
+  public var name : String;
+  public var repos : Int;
+  public var url : String;
 
   public function new(params : UserModelParams):Void
   {

@@ -2,7 +2,6 @@ package gitblog;
 
 /**
  * Type definitions for select GitHub API responses.
- * @author Domagoj Štrekelj
  */
 
 typedef ContentResponse =
