@@ -1,10 +1,9 @@
+# Markdown haxelib for parsing markdown formatted articles
 -lib markdown
-
+# Templates are embedded as resources
 -resource resources/article.mtt@ArticleTemplate
 -resource resources/articles.mtt@ArticlesTemplate
 -resource resources/user.mtt@UserTemplate
-
--dce no
 
 -cp gitblog
 -main gitblog.GitBlog
