@@ -35,8 +35,6 @@ class HomeController implements Controller
         
         userView.update(userModel);
       })
-      .onFailure(function(Message : String) { trace(Message); })
-      .onChange(function(Status : Int) { trace(Status); })
       .get();
 
     var articlesApi = new Connection('https://api.github.com/repos/dstrekelj/dstrekelj.github.io/contents/content');
@@ -58,8 +56,6 @@ class HomeController implements Controller
 
         articlesView.update(articlesModels);
       })
-      .onFailure(function(Message : String) { trace(Message); })
-      .onChange(function(Status : Int) { trace(Status); })
       .get();
   }
 

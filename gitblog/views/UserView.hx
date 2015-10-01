@@ -6,7 +6,7 @@ import gitblog.models.UserModel;
 
 class UserView extends View
 {
-  public function new() : Void
+  public function new()
   {
     super('user', 'UserTemplate');
   }

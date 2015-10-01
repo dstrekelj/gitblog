@@ -6,7 +6,7 @@ import gitblog.models.ArticleModel;
 
 class ArticleView extends View
 {
-  public function new() : Void
+  public function new()
   {
     super('article', 'ArticleTemplate');
   }

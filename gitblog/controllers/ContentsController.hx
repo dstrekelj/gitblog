@@ -34,9 +34,6 @@ class ContentsController implements Controller
 
         articleView.update(articleModel);
       })
-      .onFailure(function(response : String) {
-        trace('FAILURE: ${response}');
-      })
       .get();
   }
 }
