@@ -1,3 +1,2 @@
-<div class="article">
-::article.content::
-</div>
+<div class="timestamp">Written on ::article.timestamp::</div>
+::article.body::

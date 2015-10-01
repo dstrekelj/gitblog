@@ -1,5 +1,0 @@
-<ul>
-::foreach repositories::
-  <li>::__current__.name::</li>
-::end::
-</ul>
