@@ -19,5 +19,7 @@ class ArticleView extends View
     article.body = Markdown.markdownToHtml(js.Browser.window.atob(article.body));
     
     super.update({ article : article });
+
+    highlightly.Highlightly.highlight();
   }
 }
