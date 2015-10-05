@@ -31,10 +31,19 @@ class App
   }
 
   /**
+   * Starts the router. The initial call to the router after setting up all
+   * routes makes it possible to navigate to hash URLs at first visit / load.
+   */
+  public function run() : Void
+  {
+    router();
+  }
+
+  /**
    * Checks if current fragment identifier (hash) matches a route.
    * @param   event   The event 'onhashchange' event that called this function
    */
-  private function router(event : js.html.EventListener) : Void
+  private function router(?event : js.html.EventListener) : Void
   {
     var hash : String = js.Browser.location.hash.substr(1);
     var route : Route = findRoute(hash);

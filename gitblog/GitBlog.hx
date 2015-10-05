@@ -22,6 +22,7 @@ class GitBlog
         .route({
           path : ~/^\/contents\/(.*)$/,
           controller : new gitblog.controllers.ContentsController()
-        });
+        })
+        .run();
   }
 }
