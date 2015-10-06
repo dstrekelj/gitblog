@@ -30,7 +30,7 @@ class HomeController implements Controller
           login : userData.login,
           location : userData.location,
           repos : userData.public_repos,
-          url : userData.url
+          url : userData.html_url
         });
         
         userView.update(userModel);
